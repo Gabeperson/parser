@@ -385,15 +385,27 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        match self.first.parse(input, pos) {
+        let e = match self.first.parse(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
                 kind: ParseErrorType::Cut,
                 ..
             }) => return e,
-            _ => (),
+            Err(e) => e,
+        };
+        let e2 = match self.second.parse(input, pos) {
+            Ok(o) => return Ok(o),
+            e @ Err(ParseError {
+                kind: ParseErrorType::Cut,
+                ..
+            }) => return e,
+            Err(e) => e,
+        };
+        if e.span_or_pos.end() > e2.span_or_pos.end() {
+            Err(e)
+        } else {
+            Err(e2)
         }
-        self.second.parse(input, pos)
     }
 
     fn parse_slice(
@@ -401,15 +413,27 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        match self.first.parse_slice(input, pos) {
+        let e = match self.first.parse_slice(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
                 kind: ParseErrorType::Cut,
                 ..
             }) => return e,
-            _ => (),
+            Err(e) => e,
+        };
+        let e2 = match self.second.parse_slice(input, pos) {
+            Ok(o) => return Ok(o),
+            e @ Err(ParseError {
+                kind: ParseErrorType::Cut,
+                ..
+            }) => return e,
+            Err(e) => e,
+        };
+        if e.span_or_pos.end() > e2.span_or_pos.end() {
+            Err(e)
+        } else {
+            Err(e2)
         }
-        self.second.parse_slice(input, pos)
     }
 }
 

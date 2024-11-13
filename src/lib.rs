@@ -92,6 +92,15 @@ pub enum SpanOrPos {
     Pos(usize),
 }
 
+impl SpanOrPos {
+    pub(crate) fn end(self) -> usize {
+        match self {
+            SpanOrPos::Span(span) => span.end,
+            SpanOrPos::Pos(pos) => pos,
+        }
+    }
+}
+
 pub struct ParseOutput<Output> {
     output: Output,
     span: Span,
