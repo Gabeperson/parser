@@ -1113,3 +1113,53 @@ impl<'input, 'r> Parser<'input> for &'r str {
         }
     }
 }
+
+#[derive(Clone, Debug, Copy)]
+struct EndOfInput;
+
+impl<'input> Parser<'input> for EndOfInput {
+    type Output = ();
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        if input.len() == pos {
+            Ok(ParseOutput {
+                output: (),
+                span: Span::new(pos, pos),
+                pos,
+            })
+        } else {
+            Err(ParseError {
+                message: ErrorMessage::ExpectedEOF {
+                    remaining: &input[pos..],
+                },
+                span_or_pos: SpanOrPos::Pos(pos),
+                kind: ParseErrorType::Backtrack,
+            })
+        }
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        if input.len() == pos {
+            Ok(ParseOutput {
+                output: "",
+                span: Span::new(pos, pos),
+                pos,
+            })
+        } else {
+            Err(ParseError {
+                message: ErrorMessage::ExpectedEOF {
+                    remaining: &input[pos..],
+                },
+                span_or_pos: SpanOrPos::Pos(pos),
+                kind: ParseErrorType::Backtrack,
+            })
+        }
+    }
+}
