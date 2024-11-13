@@ -1500,6 +1500,12 @@ pub struct Expected<T> {
     phantomdata: PhantomData<T>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Expected<T> {
+    token: String,
+    phantomdata: PhantomData<T>,
+}
+
 impl<'input, T> Parser<'input> for Expected<T> {
     type Output = T;
 
@@ -1529,5 +1535,55 @@ impl<'input, T> Parser<'input> for Expected<T> {
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct IfNoProgress<P, Fail> {
+    inner: P,
+    fail: Fail,
+}
+
+impl<'input, P, Fail> Parser<'input> for IfNoProgress<P, Fail>
+where
+    P: Parser<'input>,
+    Fail: Parser<'input>,
+{
+    type Output = P::Output;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        match self.inner.parse(input, pos) {
+            Ok(o) => Ok(o),
+            Err(ParseError {
+                span_or_pos: SpanOrPos::Pos(pos1),
+                ..
+            }) if pos == pos1 => {
+                self.fail.parse(input, pos)?;
+                panic!("Fail parser must fail!");
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        match self.inner.parse_slice(input, pos) {
+            Ok(o) => Ok(o),
+            Err(ParseError {
+                span_or_pos: SpanOrPos::Pos(pos1),
+                ..
+            }) if pos == pos1 => {
+                self.fail.parse_slice(input, pos)?;
+                panic!("Fail parser must fail!");
+            }
+            Err(e) => Err(e),
+        }
     }
 }
