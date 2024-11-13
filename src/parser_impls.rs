@@ -1476,6 +1476,16 @@ pub struct Fail<T> {
     phantomdata: PhantomData<T>,
 }
 
+pub trait ToFail<T> {
+    fn to_fail(self) -> Fail<T>;
+}
+
+impl<T, U: Display> ToFail<T> for U {
+    fn to_fail(self) -> Fail<T> {
+        fail(self)
+    }
+}
+
 impl<'input, T> Parser<'input> for Fail<T> {
     type Output = T;
 
