@@ -134,6 +134,9 @@ pub trait Parser<'input>: Sized {
         }
         Ok(output)
     }
+    fn to_span(self) -> ToSpan<Self> {
+        ToSpan { inner: self }
+    }
     fn or<P2>(self, parser: P2) -> Or<Self, P2>
     where
         P2: Parser<'input, Output = Self::Output>,

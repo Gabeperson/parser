@@ -1042,7 +1042,7 @@ where
 
 #[derive(Debug, Clone, Copy)]
 pub struct ToSpan<A> {
-    pub(crate) parser: A,
+    pub(crate) inner: A,
 }
 
 impl<'input, A> Parser<'input> for ToSpan<A>
@@ -1055,7 +1055,7 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        let ParseOutput { pos, span, .. } = self.parser.parse(input, pos)?;
+        let ParseOutput { pos, span, .. } = self.inner.parse(input, pos)?;
         Ok(ParseOutput {
             output: span,
             pos,
@@ -1068,7 +1068,7 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.parser.parse_slice(input, pos)
+        self.inner.parse_slice(input, pos)
     }
 }
 
