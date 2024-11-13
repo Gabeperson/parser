@@ -1,9 +1,17 @@
 use std::marker::PhantomData;
 fn main() {
-    let parser = "hello".or("world");
-    let p2 = parser.cut();
-
-    let ret = parser.parse_to_end("hello");
+    let parser = "5"
+        .repeated()
+        .at_least(1)
+        .slice()
+        .try_map_with_span(|s, span| {
+            s.parse::<u32>().map_err(|_e| ParseError {
+                message: ErrorMessage::Custom(format!("Couldn't parse integer: {s}")),
+                span_or_pos: SpanOrPos::Span(span),
+                kind: ParseErrorType::Backtrack,
+            })
+        });
+    let ret = parser.parse_to_end("5556");
 
     match ret {
         Ok(val) => println!("parsed `{val:?}`"),
@@ -18,6 +26,12 @@ pub mod span {
     pub struct Span {
         pub start: usize,
         pub end: usize,
+    }
+
+    impl Span {
+        pub fn new(start: usize, end: usize) -> Self {
+            Self { start, end }
+        }
     }
 
     impl From<Range<usize>> for Span {
@@ -47,18 +61,27 @@ pub struct ParseError<'input> {
     pub kind: ParseErrorType,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum ErrorMessage<'input> {
     Custom(String),
-    ExpectedEOF { remaining: &'input str },
-    ExpectedOtherToken { expected: Vec<String> },
+    ExpectedEOF {
+        remaining: &'input str,
+    },
+    ExpectedOtherToken {
+        expected: Vec<String>,
+    },
+    TooFewItems {
+        expected_at_least: usize,
+        found: usize,
+        err: Box<ParseError<'input>>,
+    },
 }
 
 impl<'input> std::fmt::Display for ErrorMessage<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorMessage::Custom(s) => write!(f, "{}", s),
-            ErrorMessage::ExpectedEOF { remaining: _rem } => write!(f, "Unexpected EOF"),
+            ErrorMessage::ExpectedEOF { remaining: _rem } => write!(f, "Expected EOF"),
             ErrorMessage::ExpectedOtherToken { expected } => match expected.as_slice() {
                 [] => panic!("Expected other token with nothing?"),
                 [first] => write!(f, "Expected {first}"),
@@ -72,6 +95,16 @@ impl<'input> std::fmt::Display for ErrorMessage<'input> {
                     write!(f, "or {}", items[last])
                 }
             },
+            ErrorMessage::TooFewItems {
+                expected_at_least,
+                found,
+                err,
+            } => {
+                write!(
+                    f,
+                    "Too few items. Expected at least {expected_at_least}, found {found}. err: {err}"
+                )
+            }
         }
     }
 }
@@ -108,10 +141,14 @@ pub struct ParseOutput<Output> {
 
 // debug
 // validate?
-// padded by
-// repeated..?
-// separated_by?
 // boxed
+// try_map
+// try_map_with_span
+// to_span
+// memoized?
+// and_is
+
+// Iterator methods
 
 pub trait Parser<'input>: Sized {
     type Output;
@@ -142,6 +179,54 @@ pub trait Parser<'input>: Sized {
         Or {
             first: self,
             second: parser,
+        }
+    }
+    fn not(self) -> Not<Self> {
+        Not { inner: self }
+    }
+    fn padded_by<Pad>(self, pad: Pad) -> PaddedBy<Self, Pad>
+    where
+        Pad: Parser<'input>,
+    {
+        PaddedBy {
+            inner: self,
+            padding: pad,
+        }
+    }
+    fn repeated(self) -> Repeated<Self> {
+        Repeated {
+            inner: self,
+            min: 0,
+            max: usize::MAX,
+        }
+    }
+    fn try_map<F, O>(self, f: F) -> TryMap<Self, F, O>
+    where
+        F: Fn(Self::Output) -> Result<O, ParseError<'input>>,
+    {
+        TryMap {
+            inner: self,
+            f,
+            phantomdata: PhantomData,
+        }
+    }
+    fn try_map_with_span<F, O>(self, f: F) -> TryMapWithSpan<Self, F, O>
+    where
+        F: Fn(Self::Output, Span) -> Result<O, ParseError<'input>>,
+    {
+        TryMapWithSpan {
+            inner: self,
+            f,
+            phantomdata: PhantomData,
+        }
+    }
+    fn separated_by<Sep>(self, s: Sep) -> SeparatedBy<Self, Sep> {
+        SeparatedBy {
+            inner: self,
+            min: 0,
+            max: usize::MAX,
+            trailing: true,
+            separator: s,
         }
     }
     fn slice(self) -> Sliced<Self> {
@@ -232,6 +317,344 @@ pub trait Parser<'input>: Sized {
 
     fn simplify_types(self) -> impl Parser<'input, Output = Self::Output> {
         SimplifyTypes(self)
+    }
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct Not<P> {
+    inner: P,
+}
+
+impl<'input, P> Parser<'input> for Not<P>
+where
+    P: Parser<'input>,
+{
+    type Output = ();
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        match self.inner.parse(input, pos) {
+            Ok(o) => Err(ParseError {
+                message: ErrorMessage::Custom(
+                    "Expected to fail parsing, but succeeded.".to_string(),
+                ),
+                span_or_pos: SpanOrPos::Span(o.span),
+                kind: ParseErrorType::Backtrack,
+            }),
+            Err(_e) => Ok(ParseOutput {
+                output: (),
+                span: Span::new(pos, pos),
+                pos,
+            }),
+        }
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        match self.inner.parse_slice(input, pos) {
+            Ok(o) => Err(ParseError {
+                message: ErrorMessage::Custom(
+                    "Expected to fail parsing, but succeeded.".to_string(),
+                ),
+                span_or_pos: SpanOrPos::Span(o.span),
+                kind: ParseErrorType::Backtrack,
+            }),
+            Err(_e) => Ok(ParseOutput {
+                output: "",
+                span: Span::new(pos, pos),
+                pos,
+            }),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct Repeated<P> {
+    inner: P,
+    min: usize,
+    max: usize,
+}
+
+impl<P> Repeated<P> {
+    pub fn at_least(self, min: usize) -> Self {
+        Self { min, ..self }
+    }
+    pub fn at_most(self, max: usize) -> Self {
+        assert!(max > 0, "Max must be greater than 0!");
+        Self { max, ..self }
+    }
+    pub fn exactly(self, num: usize) -> Self {
+        assert!(num > 0, "Max must be greater than 0!");
+        Self {
+            min: num,
+            max: num,
+            ..self
+        }
+    }
+}
+
+impl<'input, P> Parser<'input> for Repeated<P>
+where
+    P: Parser<'input>,
+{
+    type Output = Vec<P::Output>;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        assert!(
+            self.min <= self.max,
+            "minimum number of elements parsed must be <= max."
+        );
+        let mut pos1 = pos;
+        let mut res = Vec::new();
+
+        let err = loop {
+            if res.len() == self.max {
+                break None;
+            }
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    res.push(o.output);
+                    pos1 = o.pos;
+                }
+                Err(e) => break Some(e),
+            }
+        };
+        if res.len() < self.min {
+            return Err(ParseError {
+                message: ErrorMessage::TooFewItems {
+                    expected_at_least: self.min,
+                    found: res.len(),
+                    err: Box::new(err.unwrap()),
+                },
+                span_or_pos: SpanOrPos::Span(Span::new(pos, pos1)),
+                kind: ParseErrorType::Backtrack,
+            });
+        }
+        Ok(ParseOutput {
+            output: res,
+            span: Span::new(pos, pos1),
+            pos: pos1,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        assert!(
+            self.min <= self.max,
+            "minimum number of elements parsed must be <= max."
+        );
+        let mut pos1 = pos;
+        let mut res = 0;
+
+        let err = loop {
+            if res == self.max {
+                break None;
+            }
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    res += 1;
+                    pos1 = o.pos;
+                }
+                Err(e) => {
+                    break Some(e);
+                }
+            }
+        };
+        if res < self.min {
+            return Err(ParseError {
+                message: ErrorMessage::TooFewItems {
+                    expected_at_least: self.min,
+                    found: res,
+                    err: Box::new(err.unwrap()),
+                },
+                span_or_pos: SpanOrPos::Span(Span::new(pos, pos1)),
+                kind: ParseErrorType::Backtrack,
+            });
+        }
+        Ok(ParseOutput {
+            output: &input[pos..pos1],
+            span: Span::new(pos, pos1),
+            pos: pos1,
+        })
+    }
+}
+#[derive(Clone, Debug, Copy)]
+pub struct SeparatedBy<P, S> {
+    inner: P,
+    min: usize,
+    max: usize,
+    trailing: bool,
+    separator: S,
+}
+
+impl<P, S> SeparatedBy<P, S> {
+    pub fn at_least(self, min: usize) -> Self {
+        Self { min, ..self }
+    }
+    pub fn at_most(self, max: usize) -> Self {
+        assert!(max > 0, "Max must be greater than 0!");
+        Self { max, ..self }
+    }
+    pub fn exactly(self, num: usize) -> Self {
+        assert!(num > 0, "Max must be greater than 0!");
+        Self {
+            min: num,
+            max: num,
+            ..self
+        }
+    }
+}
+
+impl<'input, P, S> Parser<'input> for SeparatedBy<P, S>
+where
+    P: Parser<'input>,
+    S: Parser<'input>,
+{
+    type Output = Vec<P::Output>;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        assert!(
+            self.min <= self.max,
+            "minimum number of elements parsed must be <= max."
+        );
+        let mut pos1 = pos;
+        let mut res = Vec::new();
+        let mut err = loop {
+            if res.len() == self.max {
+                break None;
+            }
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    match self.separator.parse(input, o.pos) {
+                        Ok(so) => {
+                            // res.push(o.output);
+                            pos1 = so.pos;
+                            res.push(o.output);
+                        }
+                        Err(e) => break Some(e),
+                    }
+                }
+                Err(e) => break Some(e),
+            }
+        };
+        if err.is_some() {
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    res.push(o.output);
+                    pos1 = o.pos;
+                    let error = if let Err(e) = self.separator.parse(input, pos1) {
+                        e
+                    } else {
+                        panic!("Parser must behave deterministically!");
+                    };
+                    err = Some(error);
+                }
+                Err(e) => {
+                    if !self.trailing {
+                        return Err(e);
+                    }
+                }
+            };
+        }
+        if res.len() < self.min {
+            return Err(ParseError {
+                message: ErrorMessage::TooFewItems {
+                    expected_at_least: self.min,
+                    found: res.len(),
+                    err: Box::new(err.unwrap()),
+                },
+                span_or_pos: SpanOrPos::Span(Span::new(pos, pos1)),
+                kind: ParseErrorType::Backtrack,
+            });
+        }
+        Ok(ParseOutput {
+            output: res,
+            span: Span::new(pos, pos1),
+            pos: pos1,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        assert!(
+            self.min <= self.max,
+            "minimum number of elements parsed must be <= max."
+        );
+        let mut pos1 = pos;
+        let mut res = 0;
+        let mut err = loop {
+            if res == self.max {
+                break None;
+            }
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    match self.separator.parse(input, o.pos) {
+                        Ok(so) => {
+                            // res.push(o.output);
+                            pos1 = so.pos;
+                            res += 1;
+                        }
+                        Err(e) => break Some(e),
+                    }
+                }
+                Err(e) => break Some(e),
+            }
+        };
+        if err.is_some() {
+            match self.inner.parse(input, pos1) {
+                Ok(o) => {
+                    res += 1;
+                    pos1 = o.pos;
+                    let error = if let Err(e) = self.separator.parse(input, pos1) {
+                        e
+                    } else {
+                        panic!("Parser must behave deterministically!");
+                    };
+                    err = Some(error);
+                }
+                Err(e) => {
+                    if !self.trailing {
+                        return Err(e);
+                    }
+                }
+            };
+        }
+        if res < self.min {
+            return Err(ParseError {
+                message: ErrorMessage::TooFewItems {
+                    expected_at_least: self.min,
+                    found: res,
+                    err: Box::new(err.unwrap()),
+                },
+                span_or_pos: SpanOrPos::Span(Span::new(pos, pos1)),
+                kind: ParseErrorType::Backtrack,
+            });
+        }
+        Ok(ParseOutput {
+            output: &input[pos..pos1],
+            span: Span::new(pos, pos1),
+            pos: pos1,
+        })
     }
 }
 
@@ -457,6 +880,83 @@ where
         self.inner.parse_slice(input, pos)
     }
 }
+
+#[derive(Clone, Debug, Copy)]
+pub struct TryMap<P, F, O> {
+    inner: P,
+    f: F,
+    phantomdata: PhantomData<O>,
+}
+
+impl<'input, P, F, O> Parser<'input> for TryMap<P, F, O>
+where
+    P: Parser<'input>,
+    F: Fn(P::Output) -> Result<O, ParseError<'input>>,
+{
+    type Output = O;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
+        let func = &self.f;
+        let output = func(output);
+        output.map(|o| ParseOutput {
+            output: o,
+            span,
+            pos,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.inner.parse_slice(input, pos)
+    }
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct TryMapWithSpan<P, F, O> {
+    inner: P,
+    f: F,
+    phantomdata: PhantomData<O>,
+}
+
+impl<'input, P, F, O> Parser<'input> for TryMapWithSpan<P, F, O>
+where
+    P: Parser<'input>,
+    F: Fn(P::Output, Span) -> Result<O, ParseError<'input>>,
+{
+    type Output = O;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
+        let func = &self.f;
+        let output = func(output, span);
+        output.map(|o| ParseOutput {
+            output: o,
+            span,
+            pos,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.inner.parse_slice(input, pos)
+    }
+}
+
 #[derive(Clone, Debug, Copy)]
 pub struct MapWithSpan<P, F, O> {
     inner: P,
@@ -509,7 +1009,9 @@ where
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                e.message = ErrorMessage::Custom(self.label.to_string());
+                e.message = ErrorMessage::ExpectedOtherToken {
+                    expected: vec![self.label.to_string()],
+                };
                 Err(e)
             }
         }
@@ -523,7 +1025,9 @@ where
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                e.message = ErrorMessage::Custom(self.label.to_string());
+                e.message = ErrorMessage::ExpectedOtherToken {
+                    expected: vec![self.label.to_string()],
+                };
                 Err(e)
             }
         }
@@ -609,6 +1113,66 @@ where
                 start: span1.start,
                 end: span2.end,
             },
+        })
+    }
+}
+#[derive(Clone, Debug, Copy)]
+pub struct PaddedBy<P, Pad> {
+    inner: P,
+    padding: Pad,
+}
+
+impl<'input, P, Pad> Parser<'input> for PaddedBy<P, Pad>
+where
+    P: Parser<'input>,
+    Pad: Parser<'input>,
+{
+    type Output = <P as Parser<'input>>::Output;
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        let parse_padding = |pos| {
+            self.padding
+                .parse(input, pos)
+                .map_or(pos, |output| output.pos)
+        };
+        let pos1 = parse_padding(pos);
+        let ParseOutput {
+            pos: pos1,
+            output,
+            span: spanr,
+        } = self.inner.parse(input, pos1)?;
+        let pos1 = parse_padding(pos1);
+        Ok(ParseOutput {
+            output,
+            span: spanr,
+            pos: pos1,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        let parse_padding = |pos| {
+            self.padding
+                .parse_slice(input, pos)
+                .map_or(pos, |output| output.pos)
+        };
+        let pos1 = parse_padding(pos);
+        let ParseOutput {
+            pos: pos1,
+            output: _,
+            span: _,
+        } = self.inner.parse_slice(input, pos1)?;
+        let pos1 = parse_padding(pos1);
+        Ok(ParseOutput {
+            output: &input[pos..pos1],
+            span: Span::new(pos, pos1),
+            pos: pos1,
         })
     }
 }
@@ -765,12 +1329,7 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        let ParseOutput { pos, span, .. } = self.parser.parse_slice(input, pos)?;
-        Ok(ParseOutput {
-            output: "",
-            pos,
-            span,
-        })
+        self.parser.parse_slice(input, pos)
     }
 }
 
