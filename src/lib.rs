@@ -1,3 +1,4 @@
+// #![warn(clippy::nursery, clippy::pedantic, clippy::all)]
 pub mod span;
 use std::marker::PhantomData;
 
@@ -133,7 +134,10 @@ pub trait Parser<'input>: Sized {
         }
         Ok(output)
     }
-    fn or(self, parser: Self) -> Or<Self> {
+    fn or<P2>(self, parser: P2) -> Or<Self, P2>
+    where
+        P2: Parser<'input, Output = Self::Output>,
+    {
         Or {
             first: self,
             second: parser,

@@ -368,14 +368,15 @@ where
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct Or<P> {
+pub struct Or<P, P2> {
     pub(crate) first: P,
-    pub(crate) second: P,
+    pub(crate) second: P2,
 }
 
-impl<'input, P> Parser<'input> for Or<P>
+impl<'input, P, P2> Parser<'input> for Or<P, P2>
 where
     P: Parser<'input>,
+    P2: Parser<'input, Output = P::Output>,
 {
     type Output = P::Output;
 
