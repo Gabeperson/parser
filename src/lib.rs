@@ -1,6 +1,6 @@
 // #![warn(clippy::nursery, clippy::pedantic, clippy::all)]
 pub mod span;
-use std::marker::PhantomData;
+use std::{fmt::Display, marker::PhantomData};
 
 use span::*;
 pub mod parser_impls;
@@ -176,11 +176,11 @@ pub trait Parser<'input>: Sized {
             padding: pad,
         }
     }
-    fn if_no_progress<Fail>(self, fail: Fail) -> IfNoProgress<Self, Fail>
-    where
-        Fail: Parser<'input>,
-    {
-        IfNoProgress { inner: self, fail }
+    fn if_no_progress(self, fail: impl Display) -> IfNoProgress<Self> {
+        IfNoProgress {
+            inner: self,
+            fail: fail.to_string(),
+        }
     }
     fn repeated(self) -> Repeated<Self> {
         Repeated {

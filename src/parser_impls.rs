@@ -1533,15 +1533,14 @@ impl<'input, T> Parser<'input> for Expected<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct IfNoProgress<P, Fail> {
+pub struct IfNoProgress<P> {
     pub(crate) inner: P,
-    pub(crate) fail: Fail,
+    pub(crate) fail: String,
 }
 
-impl<'input, P, Fail> Parser<'input> for IfNoProgress<P, Fail>
+impl<'input, P> Parser<'input> for IfNoProgress<P>
 where
     P: Parser<'input>,
-    Fail: Parser<'input>,
 {
     type Output = P::Output;
 
@@ -1555,10 +1554,11 @@ where
             Err(ParseError {
                 span_or_pos: SpanOrPos::Pos(pos1),
                 ..
-            }) if pos == pos1 => {
-                self.fail.parse(input, pos)?;
-                panic!("Fail parser must fail!");
-            }
+            }) if pos == pos1 => Err(ParseError {
+                message: ErrorMessage::Custom(self.fail.clone()),
+                span_or_pos: SpanOrPos::Pos(pos),
+                kind: ParseErrorType::Backtrack,
+            }),
             Err(e) => Err(e),
         }
     }
@@ -1573,10 +1573,11 @@ where
             Err(ParseError {
                 span_or_pos: SpanOrPos::Pos(pos1),
                 ..
-            }) if pos == pos1 => {
-                self.fail.parse_slice(input, pos)?;
-                panic!("Fail parser must fail!");
-            }
+            }) if pos == pos1 => Err(ParseError {
+                message: ErrorMessage::Custom(self.fail.clone()),
+                span_or_pos: SpanOrPos::Pos(pos),
+                kind: ParseErrorType::Backtrack,
+            }),
             Err(e) => Err(e),
         }
     }
