@@ -691,9 +691,11 @@ where
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                e.message = ErrorMessage::ExpectedOtherToken {
-                    expected: vec![self.label.to_string()],
-                };
+                if let ErrorMessage::ExpectedOtherToken { ref mut expected } = e.message {
+                    // Might use memory memory than needed but less allocation
+                    expected.clear();
+                    expected.push(self.label.to_string())
+                }
                 Err(e)
             }
         }
@@ -707,9 +709,11 @@ where
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                e.message = ErrorMessage::ExpectedOtherToken {
-                    expected: vec![self.label.to_string()],
-                };
+                if let ErrorMessage::ExpectedOtherToken { ref mut expected } = e.message {
+                    // Might use memory memory than needed but less allocation
+                    expected.clear();
+                    expected.push(self.label.to_string())
+                }
                 Err(e)
             }
         }
