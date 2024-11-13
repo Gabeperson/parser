@@ -1008,16 +1008,9 @@ where
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Ignored<A> {
     pub(crate) parser: A,
-}
-
-impl<A: Clone> Clone for Ignored<A> {
-    fn clone(&self) -> Self {
-        Self {
-            parser: self.parser.clone(),
-        }
-    }
 }
 
 impl<'input, A> Parser<'input> for Ignored<A>
@@ -1033,6 +1026,38 @@ where
         let ParseOutput { pos, span, .. } = self.parser.parse(input, pos)?;
         Ok(ParseOutput {
             output: (),
+            pos,
+            span,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.parser.parse_slice(input, pos)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ToSpan<A> {
+    pub(crate) parser: A,
+}
+
+impl<'input, A> Parser<'input> for ToSpan<A>
+where
+    A: Parser<'input>,
+{
+    type Output = Span;
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        let ParseOutput { pos, span, .. } = self.parser.parse(input, pos)?;
+        Ok(ParseOutput {
+            output: span,
             pos,
             span,
         })
