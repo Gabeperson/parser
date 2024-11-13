@@ -1381,7 +1381,34 @@ impl<'input> Parser<'input> for Any {
     }
 }
 
-impl<'input> Parser<'input> for RangeInclusive<char> {
+#[derive(Clone, Copy, Debug)]
+struct CharRange(pub char, pub char);
+
+impl From<RangeInclusive<char>> for CharRange {
+    fn from(value: RangeInclusive<char>) -> Self {
+        CharRange(*value.start(), *value.end())
+    }
+}
+
+impl From<CharRange> for RangeInclusive<char> {
+    fn from(value: CharRange) -> Self {
+        Self::new(value.0, value.1)
+    }
+}
+
+impl CharRange {
+    pub fn contains(&self, c: &char) -> bool {
+        RangeInclusive::new(self.0, self.1).contains(c)
+    }
+    pub fn start(&self) -> char {
+        self.0
+    }
+    pub fn end(&self) -> char {
+        self.1
+    }
+}
+
+impl<'input> Parser<'input> for CharRange {
     type Output = &'input str;
 
     fn parse(
