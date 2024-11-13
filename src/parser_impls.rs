@@ -1197,6 +1197,16 @@ impl<'input> Parser<'input> for IntParser {
             }
         }
 
+        if end - pos == 0 {
+            return Err(ParseError {
+                message: ErrorMessage::ExpectedOtherToken {
+                    expected: vec![format!("base-{} integer", self.0)],
+                },
+                span_or_pos: SpanOrPos::Pos(pos),
+                kind: ParseErrorType::Backtrack,
+            });
+        }
+
         Ok(ParseOutput {
             output: &input[pos..end],
             span: Span::new(pos, end),
