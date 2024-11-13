@@ -1500,12 +1500,6 @@ pub struct Expected<T> {
     phantomdata: PhantomData<T>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Expected<T> {
-    token: String,
-    phantomdata: PhantomData<T>,
-}
-
 impl<'input, T> Parser<'input> for Expected<T> {
     type Output = T;
 
@@ -1540,8 +1534,8 @@ impl<'input, T> Parser<'input> for Expected<T> {
 
 #[derive(Debug, Clone)]
 pub struct IfNoProgress<P, Fail> {
-    inner: P,
-    fail: Fail,
+    pub(crate) inner: P,
+    pub(crate) fail: Fail,
 }
 
 impl<'input, P, Fail> Parser<'input> for IfNoProgress<P, Fail>

@@ -176,6 +176,12 @@ pub trait Parser<'input>: Sized {
             padding: pad,
         }
     }
+    fn if_no_progress<Fail>(self, fail: Fail) -> IfNoProgress<Self, Fail>
+    where
+        Fail: Parser<'input>,
+    {
+        IfNoProgress { inner: self, fail }
+    }
     fn repeated(self) -> Repeated<Self> {
         Repeated {
             inner: self,
