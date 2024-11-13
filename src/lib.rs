@@ -143,6 +143,15 @@ pub trait Parser<'input>: Sized {
             second: parser,
         }
     }
+    fn and_is<P2>(self, parser: P2) -> AndIs<Self, P2>
+    where
+        P2: Parser<'input>,
+    {
+        AndIs {
+            first: self,
+            second: parser,
+        }
+    }
     fn not(self) -> Not<Self> {
         Not { inner: self }
     }

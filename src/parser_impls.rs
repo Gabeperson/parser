@@ -975,6 +975,38 @@ where
         })
     }
 }
+#[derive(Clone, Debug, Copy)]
+pub struct AndIs<A, B> {
+    pub(crate) first: A,
+    pub(crate) second: B,
+}
+
+impl<'input, A, B> Parser<'input> for AndIs<A, B>
+where
+    A: Parser<'input>,
+    B: Parser<'input>,
+{
+    type Output = <A as Parser<'input>>::Output;
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        let ParseOutput { output, pos, span } = self.first.parse(input, pos)?;
+        self.second.parse(input, pos)?;
+        Ok(ParseOutput { pos, span, output })
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        let ParseOutput { output, pos, span } = self.first.parse_slice(input, pos)?;
+        self.second.parse_slice(input, pos)?;
+        Ok(ParseOutput { pos, span, output })
+    }
+}
 
 pub struct Ignored<A> {
     pub(crate) parser: A,
@@ -1278,6 +1310,41 @@ impl<'input> Parser<'input> for AlphaNumeric {
                     pos: pos + 1,
                 });
             }
+        }
+        Err(ParseError {
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec!["Alphanumeric character".to_string()],
+            },
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+}
+#[derive(Clone, Debug, Copy)]
+pub struct Any;
+
+impl<'input> Parser<'input> for Any {
+    type Output = &'input str;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        if input[pos..].chars().next().is_some() {
+            return Ok(ParseOutput {
+                output: &input[pos..pos + 1],
+                span: Span::new(pos, pos + 1),
+                pos: pos + 1,
+            });
         }
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
