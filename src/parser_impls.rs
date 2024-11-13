@@ -1463,30 +1463,20 @@ impl<'input> Parser<'input> for CharRange {
     }
 }
 
-pub fn fail<T>(message: impl Display) -> Fail<T> {
-    Fail {
+pub fn expected<T>(message: impl Display) -> Expected<T> {
+    Expected {
         message: message.to_string(),
         phantomdata: PhantomData,
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Fail<T> {
+pub struct Expected<T> {
     message: String,
     phantomdata: PhantomData<T>,
 }
 
-pub trait ToFail<T> {
-    fn to_fail(self) -> Fail<T>;
-}
-
-impl<T, U: Display> ToFail<T> for U {
-    fn to_fail(self) -> Fail<T> {
-        fail(self)
-    }
-}
-
-impl<'input, T> Parser<'input> for Fail<T> {
+impl<'input, T> Parser<'input> for Expected<T> {
     type Output = T;
 
     fn parse(
