@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::RangeInclusive};
+use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive};
 
 use super::*;
 #[derive(Clone, Debug, Copy)]
@@ -1460,6 +1460,13 @@ impl<'input> Parser<'input> for CharRange {
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
         })
+    }
+}
+
+pub fn fail<T>(message: impl Display) -> Fail<T> {
+    Fail {
+        message: message.to_string(),
+        phantomdata: PhantomData,
     }
 }
 
