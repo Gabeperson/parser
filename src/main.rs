@@ -1,11 +1,9 @@
-use parser::prelude::*;
-
 fn main() {
-    let parser = 'b'..='b';
-    let ret = parser.parse_to_end("a");
+    // let parser = 'b'..='b';
+    // let ret = parser.parse_to_end("a");
 
-    match ret {
-        Ok(val) => println!("parsed `{val:?}`"),
-        Err(e) => println!("Err: {}", e),
-    }
+    // match ret {
+    //     Ok(val) => println!("parsed `{val:?}`"),
+    //     Err(e) => println!("Err: {}", e),
+    // }
 }

@@ -1462,3 +1462,37 @@ impl<'input> Parser<'input> for CharRange {
         })
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Fail<T> {
+    message: String,
+    phantomdata: PhantomData<T>,
+}
+
+impl<'input, T> Parser<'input> for Fail<T> {
+    type Output = T;
+
+    fn parse(
+        &self,
+        _input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        Err(ParseError {
+            message: ErrorMessage::Custom(self.message.clone()),
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        _input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        Err(ParseError {
+            message: ErrorMessage::Custom(self.message.clone()),
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+}
