@@ -1463,16 +1463,16 @@ impl<'input> Parser<'input> for CharRange {
     }
 }
 
-pub fn expected<T>(message: impl Display) -> Expected<T> {
+pub fn expected<T>(token: impl Display) -> Expected<T> {
     Expected {
-        message: message.to_string(),
+        token: token.to_string(),
         phantomdata: PhantomData,
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Expected<T> {
-    message: String,
+    token: String,
     phantomdata: PhantomData<T>,
 }
 
@@ -1485,7 +1485,9 @@ impl<'input, T> Parser<'input> for Expected<T> {
         pos: usize,
     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
         Err(ParseError {
-            message: ErrorMessage::Custom(self.message.clone()),
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec![self.token.clone()],
+            },
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
         })
@@ -1497,7 +1499,9 @@ impl<'input, T> Parser<'input> for Expected<T> {
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
         Err(ParseError {
-            message: ErrorMessage::Custom(self.message.clone()),
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec![self.token.clone()],
+            },
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
         })
