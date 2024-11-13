@@ -1163,3 +1163,44 @@ impl<'input> Parser<'input> for EndOfInput {
         }
     }
 }
+
+pub fn int(radix: u32) -> IntParser {
+    assert!(radix <= 36, "Radix must be 36 or smaller");
+    IntParser(radix)
+}
+
+#[derive(Clone, Debug, Copy)]
+pub struct IntParser(u32);
+
+impl<'input> Parser<'input> for IntParser {
+    type Output = &'input str; // Parsed output as integer
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        let mut end = pos;
+        for (i, c) in input[pos..].char_indices() {
+            if c.is_digit(self.0) {
+                end = pos + i + c.len_utf8();
+            } else {
+                break;
+            }
+        }
+
+        Ok(ParseOutput {
+            output: &input[pos..end],
+            span: Span::new(pos, end),
+            pos: end,
+        })
+    }
+}
