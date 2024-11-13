@@ -213,11 +213,11 @@ pub trait Parser<'input>: Sized {
     fn to<O: Clone>(self, o: O) -> To<Self, O> {
         To { inner: self, o }
     }
-    fn map_with_span<O, F>(self, f: F) -> Map<Self, F, O>
+    fn map_with_span<O, F>(self, f: F) -> MapWithSpan<Self, F, O>
     where
         F: Fn(Self::Output, Span) -> O,
     {
-        Map {
+        MapWithSpan {
             inner: self,
             f,
             phantomdata: PhantomData,
