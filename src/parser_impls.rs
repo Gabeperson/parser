@@ -1173,7 +1173,7 @@ pub fn int(radix: u32) -> IntParser {
 pub struct IntParser(u32);
 
 impl<'input> Parser<'input> for IntParser {
-    type Output = &'input str; // Parsed output as integer
+    type Output = &'input str;
 
     fn parse(
         &self,
@@ -1211,6 +1211,80 @@ impl<'input> Parser<'input> for IntParser {
             output: &input[pos..end],
             span: Span::new(pos, end),
             pos: end,
+        })
+    }
+}
+#[derive(Clone, Debug, Copy)]
+pub struct Alpha;
+
+impl<'input> Parser<'input> for Alpha {
+    type Output = &'input str;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        if let Some(c) = input[pos..].chars().next() {
+            if c.is_alphabetic() {
+                return Ok(ParseOutput {
+                    output: &input[pos..pos + 1],
+                    span: Span::new(pos, pos + 1),
+                    pos: pos + 1,
+                });
+            }
+        }
+        Err(ParseError {
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec!["Alphabetical character".to_string()],
+            },
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+}
+#[derive(Clone, Debug, Copy)]
+pub struct AlphaNumeric;
+
+impl<'input> Parser<'input> for AlphaNumeric {
+    type Output = &'input str;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        if let Some(c) = input[pos..].chars().next() {
+            if c.is_alphanumeric() {
+                return Ok(ParseOutput {
+                    output: &input[pos..pos + 1],
+                    span: Span::new(pos, pos + 1),
+                    pos: pos + 1,
+                });
+            }
+        }
+        Err(ParseError {
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec!["Alphanumeric character".to_string()],
+            },
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
         })
     }
 }
