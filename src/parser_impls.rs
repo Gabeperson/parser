@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::RangeInclusive};
 
 use super::*;
 #[derive(Clone, Debug, Copy)]
@@ -1282,6 +1282,41 @@ impl<'input> Parser<'input> for AlphaNumeric {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
                 expected: vec!["Alphanumeric character".to_string()],
+            },
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+}
+
+impl<'input> Parser<'input> for RangeInclusive<char> {
+    type Output = &'input str;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        if let Some(c) = input[pos..].chars().next() {
+            if self.contains(&c) {
+                return Ok(ParseOutput {
+                    output: &input[pos..pos + 1],
+                    span: Span::new(pos, pos + 1),
+                    pos: pos + 1,
+                });
+            }
+        }
+        Err(ParseError {
+            message: ErrorMessage::ExpectedOtherToken {
+                expected: vec![format!("char in {}..{}", self.start(), self.end())],
             },
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
