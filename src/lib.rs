@@ -212,11 +212,11 @@ pub trait Parser<'input>: Sized {
     fn optional(self) -> Optional<Self> {
         Optional { inner: self }
     }
-    fn map<O, F>(self, f: F) -> MapWithSpan<Self, F, O>
+    fn map<O, F>(self, f: F) -> Map<Self, F, O>
     where
         F: Fn(Self::Output) -> O,
     {
-        MapWithSpan {
+        Map {
             inner: self,
             f,
             phantomdata: PhantomData,
