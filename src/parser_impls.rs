@@ -1115,7 +1115,7 @@ impl<'input, 'r> Parser<'input> for &'r str {
 }
 
 #[derive(Clone, Debug, Copy)]
-struct EndOfInput;
+pub struct EndOfInput;
 
 impl<'input> Parser<'input> for EndOfInput {
     type Output = ();

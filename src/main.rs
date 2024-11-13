@@ -1,4 +1,5 @@
 use parser::prelude::*;
+
 fn main() {
     let parser = "5"
         .repeated()
