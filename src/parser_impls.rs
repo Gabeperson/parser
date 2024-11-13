@@ -1382,7 +1382,7 @@ impl<'input> Parser<'input> for Any {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct CharRange(pub char, pub char);
+pub struct CharRange(pub char, pub char);
 
 impl From<RangeInclusive<char>> for CharRange {
     fn from(value: RangeInclusive<char>) -> Self {
@@ -1393,6 +1393,22 @@ impl From<RangeInclusive<char>> for CharRange {
 impl From<CharRange> for RangeInclusive<char> {
     fn from(value: CharRange) -> Self {
         Self::new(value.0, value.1)
+    }
+}
+
+pub trait ToCharRange {
+    fn to_char_range(self) -> CharRange;
+}
+
+impl ToCharRange for RangeInclusive<char> {
+    fn to_char_range(self) -> CharRange {
+        self.into()
+    }
+}
+
+impl ToCharRange for CharRange {
+    fn to_char_range(self) -> CharRange {
+        self
     }
 }
 
