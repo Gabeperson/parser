@@ -1611,7 +1611,6 @@ where
     }
 }
 
-#[doc(hidden)]
 pub trait ChoiceImpl<'input> {
     #[doc(hidden)]
     type Output;
@@ -1627,6 +1626,32 @@ pub trait ChoiceImpl<'input> {
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+}
+pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
+    Choice { inner: between }
+}
+
+impl<'input, P> ChoiceImpl<'input> for P
+where
+    P: Parser<'input>,
+{
+    type Output = P::Output;
+
+    fn parse_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse(input, pos)
+    }
+
+    fn parse_slice_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
 }
 
 macro_rules! impl_choice {
@@ -1717,17 +1742,62 @@ impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W,);
 impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X,);
 impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X, Y, Z,);
 
-pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
-    Choice { inner: between }
+#[derive(Clone, Copy, Debug)]
+pub struct Group<P> {
+    inner: P,
 }
 
-impl<'input, P> ChoiceImpl<'input> for P
+impl<'input, P> Parser<'input> for Group<P>
+where
+    P: GroupImpl<'input>,
+{
+    type Output = P::Output;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.inner.parse_group(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.inner.parse_slice_group(input, pos)
+    }
+}
+
+pub trait GroupImpl<'input> {
+    #[doc(hidden)]
+    type Output;
+    #[doc(hidden)]
+    fn parse_group(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
+    #[doc(hidden)]
+    fn parse_slice_group(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+}
+
+pub fn group<'input, P: GroupImpl<'input>>(group: P) -> Group<P> {
+    Group { inner: group }
+}
+
+impl<'input, P> GroupImpl<'input> for P
 where
     P: Parser<'input>,
 {
     type Output = P::Output;
 
-    fn parse_choice(
+    fn parse_group(
         &self,
         input: &'input str,
         pos: usize,
@@ -1735,7 +1805,7 @@ where
         self.parse(input, pos)
     }
 
-    fn parse_slice_choice(
+    fn parse_slice_group(
         &self,
         input: &'input str,
         pos: usize,
@@ -1743,3 +1813,118 @@ where
         self.parse_slice(input, pos)
     }
 }
+
+macro_rules! impl_group {
+    ($(($type:ident, $output:ident),)+) => {
+        impl<'input, $($type),+> GroupImpl<'input> for ($($type,)+)
+        where
+            $($type: GroupImpl<'input>),+
+        {
+            type Output = ($($type::Output,)+);
+
+            fn parse_group(
+                &self,
+                input: &'input str,
+                pos: usize,
+            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+                // Cursed, but it works
+                #[allow(non_snake_case)]
+                let ($($type,)+) = self;
+                let initial_pos = pos;
+                $(
+                #[allow(non_snake_case)]
+                let ParseOutput {
+                    output: $output,
+                    pos,
+                    span: _,
+                } = $type.parse_group(input, pos)?;
+                )+
+                Ok(ParseOutput {
+                    output: ($($output,)+),
+                    pos,
+                    span: Span {
+                        start: initial_pos,
+                        end: pos,
+                    },
+                })
+            }
+
+            fn parse_slice_group(
+                &self,
+                input: &'input str,
+                pos: usize,
+            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+                // Cursed, but it works
+                #[allow(non_snake_case)]
+                let ($($type,)+) = self;
+                let initial_pos = pos;
+                $(
+                #[allow(non_snake_case)]
+                let ParseOutput {
+                    output: _,
+                    pos,
+                    span: _,
+                } = $type.parse_slice_group(input, pos)?;
+                )+
+                Ok(ParseOutput {
+                    output: &input[initial_pos..pos],
+                    pos,
+                    span: Span {
+                        start: initial_pos,
+                        end: pos,
+                    },
+                })
+            }
+        }
+    };
+}
+
+// Oh the things we do for variadics...
+#[rustfmt::skip]
+impl_group!((A, AO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO),);
+#[rustfmt::skip]
+impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO), (Y, YO), (Z, ZO),);
