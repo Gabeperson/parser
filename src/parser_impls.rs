@@ -1953,6 +1953,7 @@ where
     }
 }
 
+#[derive(Clone)]
 pub struct BoxedParser<'a, 'input, O>(pub(crate) Rc<dyn Parser<'input, Output = O> + 'a>);
 
 impl<'input, 'a, O> Parser<'input> for BoxedParser<'a, 'input, O> {
