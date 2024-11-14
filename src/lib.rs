@@ -7,7 +7,9 @@ pub mod parser_impls;
 use parser_impls::*;
 
 pub mod prelude {
-    pub use super::parser_impls::{choice, expected, int, Alpha, AlphaNumeric};
+    pub use super::parser_impls::{
+        choice, expected, int, Alpha, AlphaNumeric, EndOfInput, ToCharRange as _,
+    };
     pub use super::span::Span;
     pub use super::Parser;
     pub use super::{ErrorMessage, ParseError, ParseErrorType, ParseOutput, SpanOrPos};
