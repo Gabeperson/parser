@@ -1,9 +1,6 @@
+use parser::prelude::*;
 fn main() {
-    // let parser = 'b'..='b';
-    // let ret = parser.parse_to_end("a");
-
-    // match ret {
-    //     Ok(val) => println!("parsed `{val:?}`"),
-    //     Err(e) => println!("Err: {}", e),
-    // }
+    let c = choice(("h".ignore_then("ello"), "hello", "hi"));
+    let s = "hel";
+    dbg!(&c.parse_to_end(s));
 }

@@ -1582,3 +1582,155 @@ where
         }
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct Choice<P> {
+    inner: P,
+}
+
+impl<'input, P> Parser<'input> for Choice<P>
+where
+    P: ChoiceImpl<'input>,
+{
+    type Output = P::Output;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.inner.parse_choice(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.inner.parse_slice_choice(input, pos)
+    }
+}
+
+#[doc(hidden)]
+pub trait ChoiceImpl<'input> {
+    #[doc(hidden)]
+    type Output;
+    #[doc(hidden)]
+    fn parse_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
+    #[doc(hidden)]
+    fn parse_slice_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+}
+
+macro_rules! impl_choice {
+    ($($type:ident,)+) => {
+        impl<'input, T, $($type),+> ChoiceImpl<'input> for ($($type,)+)
+        where
+            $($type: ChoiceImpl<'input, Output = T>),+
+        {
+            type Output = T;
+
+            fn parse_choice(
+                &self,
+                input: &'input str,
+                pos: usize,
+            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+                // Cursed, but it works
+                #[allow(non_snake_case)]
+                let ($($type,)+) = self;
+                $(
+                #[allow(non_snake_case)]
+                let $type = match $type.parse_choice(input, pos) {
+                    Ok(o) => return Ok(o),
+                    e @ Err(ParseError {
+                        kind: ParseErrorType::Cut,
+                        ..
+                    }) => return e,
+                    Err(e) => e,
+                };
+                )+
+                #[allow(non_snake_case)]
+                Err([$($type,)+]
+                    .into_iter()
+                    .max_by_key(|e| e.span_or_pos.end())
+                    .expect("There is at least 1 in this array"))
+            }
+
+            fn parse_slice_choice(
+                &self,
+                input: &'input str,
+                pos: usize,
+            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+                // Cursed, but it works
+                #[allow(non_snake_case)]
+                let ($($type,)+) = self;
+                $(
+                #[allow(non_snake_case)]
+                let $type = match $type.parse_slice_choice(input, pos) {
+                    Ok(o) => return Ok(o),
+                    e @ Err(ParseError {
+                        kind: ParseErrorType::Cut,
+                        ..
+                    }) => return e,
+                    Err(e) => e,
+                };
+                )+
+                #[allow(non_snake_case)]
+                Err([$($type,)+]
+                    .into_iter()
+                    .max_by_key(|e| e.span_or_pos.end())
+                    .expect("There is at least 1 in this array"))
+            }
+        }
+    };
+}
+
+impl_choice!(A,);
+impl_choice!(A, B,);
+impl_choice!(A, B, C,);
+impl_choice!(A, B, C, D,);
+impl_choice!(A, B, C, D, E,);
+impl_choice!(A, B, C, D, E, F,);
+impl_choice!(A, B, C, D, E, F, G,);
+impl_choice!(A, B, C, D, E, F, G, H,);
+impl_choice!(A, B, C, D, E, F, G, H, I,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O,);
+
+pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
+    Choice { inner: between }
+}
+
+impl<'input, P> ChoiceImpl<'input> for P
+where
+    P: Parser<'input>,
+{
+    type Output = P::Output;
+
+    fn parse_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.parse(input, pos)
+    }
+
+    fn parse_slice_choice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.parse_slice(input, pos)
+    }
+}
