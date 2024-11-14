@@ -1374,9 +1374,9 @@ impl<'input> Parser<'input> for AlphaNumeric {
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct Any;
+pub struct Any1;
 
-impl<'input> Parser<'input> for Any {
+impl<'input> Parser<'input> for Any1 {
     type Output = &'input str;
 
     fn parse(
@@ -1707,6 +1707,15 @@ impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L,);
 impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M,);
 impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N,);
 impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X,);
+impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X, Y, Z,);
 
 pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
     Choice { inner: between }
