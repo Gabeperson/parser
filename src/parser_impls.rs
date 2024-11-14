@@ -1928,3 +1928,27 @@ impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, H
 impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO),);
 #[rustfmt::skip]
 impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO), (Y, YO), (Z, ZO),);
+
+impl<'input, F, P, O> Parser<'input> for F
+where
+    P: Parser<'input, Output = O>,
+    F: Fn() -> P,
+{
+    type Output = O;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self().parse(input, pos)
+    }
+
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self().parse_slice(input, pos)
+    }
+}
