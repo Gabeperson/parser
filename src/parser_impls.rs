@@ -1154,7 +1154,7 @@ where
         } = self.second.parse_slice(input, pos1)?;
         Ok(ParseOutput {
             output: &input[pos..pos2],
-            pos,
+            pos: pos2,
             span: Span {
                 start: span1.start,
                 end: span2.end,
