@@ -1,6 +1,6 @@
 // #![warn(clippy::nursery, clippy::pedantic, clippy::all)]
 pub mod span;
-use std::{fmt::Display, marker::PhantomData};
+use std::{fmt::Display, marker::PhantomData, rc::Rc};
 
 use span::*;
 pub mod parser_impls;
@@ -120,7 +120,7 @@ pub struct ParseOutput<Output> {
 
 // Iterator methods
 
-pub trait Parser<'input>: Sized {
+pub trait Parser<'input> {
     type Output;
     fn parse(
         &self,
@@ -145,12 +145,16 @@ pub trait Parser<'input>: Sized {
         }
         Ok(output)
     }
-    fn to_span(self) -> ToSpan<Self> {
+    fn to_span(self) -> ToSpan<Self>
+    where
+        Self: Sized,
+    {
         ToSpan { inner: self }
     }
     fn or<P2>(self, parser: P2) -> Or<Self, P2>
     where
         P2: Parser<'input, Output = Self::Output>,
+        Self: Sized,
     {
         Or {
             first: self,
@@ -160,31 +164,42 @@ pub trait Parser<'input>: Sized {
     fn and_is<P2>(self, parser: P2) -> AndIs<Self, P2>
     where
         P2: Parser<'input>,
+        Self: Sized,
     {
         AndIs {
             first: self,
             second: parser,
         }
     }
-    fn not(self) -> Not<Self> {
+    fn not(self) -> Not<Self>
+    where
+        Self: Sized,
+    {
         Not { inner: self }
     }
     fn padded_by<Pad>(self, pad: Pad) -> PaddedBy<Self, Pad>
     where
         Pad: Parser<'input>,
+        Self: Sized,
     {
         PaddedBy {
             inner: self,
             padding: pad,
         }
     }
-    fn if_no_progress(self, fail: impl Display) -> IfNoProgress<Self> {
+    fn if_no_progress(self, fail: impl Display) -> IfNoProgress<Self>
+    where
+        Self: Sized,
+    {
         IfNoProgress {
             inner: self,
             fail: fail.to_string(),
         }
     }
-    fn repeated(self) -> Repeated<Self> {
+    fn repeated(self) -> Repeated<Self>
+    where
+        Self: Sized,
+    {
         Repeated {
             inner: self,
             min: 0,
@@ -194,6 +209,7 @@ pub trait Parser<'input>: Sized {
     fn try_map<F, O>(self, f: F) -> TryMap<Self, F, O>
     where
         F: Fn(Self::Output) -> Result<O, ParseError<'input>>,
+        Self: Sized,
     {
         TryMap {
             inner: self,
@@ -204,6 +220,7 @@ pub trait Parser<'input>: Sized {
     fn try_map_with_span<F, O>(self, f: F) -> TryMapWithSpan<Self, F, O>
     where
         F: Fn(Self::Output, Span) -> Result<O, ParseError<'input>>,
+        Self: Sized,
     {
         TryMapWithSpan {
             inner: self,
@@ -211,7 +228,10 @@ pub trait Parser<'input>: Sized {
             phantomdata: PhantomData,
         }
     }
-    fn separated_by<Sep>(self, s: Sep) -> SeparatedBy<Self, Sep> {
+    fn separated_by<Sep>(self, s: Sep) -> SeparatedBy<Self, Sep>
+    where
+        Self: Sized,
+    {
         SeparatedBy {
             inner: self,
             min: 0,
@@ -220,18 +240,28 @@ pub trait Parser<'input>: Sized {
             separator: s,
         }
     }
-    fn slice(self) -> Sliced<Self> {
+    fn slice(self) -> Sliced<Self>
+    where
+        Self: Sized,
+    {
         Sliced { inner: self }
     }
-    fn cut(self) -> Cut<Self> {
+    fn cut(self) -> Cut<Self>
+    where
+        Self: Sized,
+    {
         Cut { inner: self }
     }
-    fn optional(self) -> Optional<Self> {
+    fn optional(self) -> Optional<Self>
+    where
+        Self: Sized,
+    {
         Optional { inner: self }
     }
     fn map<O, F>(self, f: F) -> Map<Self, F, O>
     where
         F: Fn(Self::Output) -> O,
+        Self: Sized,
     {
         Map {
             inner: self,
@@ -239,12 +269,16 @@ pub trait Parser<'input>: Sized {
             phantomdata: PhantomData,
         }
     }
-    fn to<O: Clone>(self, o: O) -> To<Self, O> {
+    fn to<O: Clone>(self, o: O) -> To<Self, O>
+    where
+        Self: Sized,
+    {
         To { inner: self, o }
     }
     fn map_with_span<O, F>(self, f: F) -> MapWithSpan<Self, F, O>
     where
         F: Fn(Self::Output, Span) -> O,
+        Self: Sized,
     {
         MapWithSpan {
             inner: self,
@@ -255,6 +289,7 @@ pub trait Parser<'input>: Sized {
     fn ignore_then<Parser2>(self, next: Parser2) -> IgnoreThen<Self, Parser2>
     where
         Parser2: Parser<'input>,
+        Self: Sized,
     {
         IgnoreThen {
             first: self,
@@ -265,6 +300,7 @@ pub trait Parser<'input>: Sized {
     fn then_ignore<Parser2>(self, next: Parser2) -> ThenIgnore<Self, Parser2>
     where
         Parser2: Parser<'input>,
+        Self: Sized,
     {
         ThenIgnore {
             first: self,
@@ -272,13 +308,17 @@ pub trait Parser<'input>: Sized {
         }
     }
 
-    fn ignored(self) -> Ignored<Self> {
+    fn ignored(self) -> Ignored<Self>
+    where
+        Self: Sized,
+    {
         Ignored { parser: self }
     }
 
     fn then<Parser2>(self, next: Parser2) -> Then<Self, Parser2>
     where
         Parser2: Parser<'input>,
+        Self: Sized,
     {
         Then {
             first: self,
@@ -294,6 +334,7 @@ pub trait Parser<'input>: Sized {
     where
         Parser2: Parser<'input>,
         Parser3: Parser<'input>,
+        Self: Sized,
     {
         DelimitedBy {
             left,
@@ -302,11 +343,24 @@ pub trait Parser<'input>: Sized {
         }
     }
 
-    fn labelled(self, label: &'static str) -> Labelled<Self> {
+    fn labelled(self, label: &'static str) -> Labelled<Self>
+    where
+        Self: Sized,
+    {
         Labelled { inner: self, label }
     }
 
-    fn simplify_types(self) -> impl Parser<'input, Output = Self::Output> {
-        SimplifyTypes(self)
+    // fn simplify_types(self) -> impl Parser<'input, Output = Self::Output>
+    // where
+    //     Self: Sized,
+    // {
+    //     SimplifyTypes(self)
+    // }
+
+    fn boxed<'a>(self) -> BoxedParser<'a, 'input, Self::Output>
+    where
+        Self: Sized + 'a,
+    {
+        BoxedParser(Rc::new(self))
     }
 }

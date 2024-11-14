@@ -1,4 +1,4 @@
-use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive};
+use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, rc::Rc};
 
 use super::*;
 #[derive(Clone, Debug, Copy)]
@@ -744,29 +744,29 @@ where
     }
 }
 
-#[derive(Clone, Debug, Copy)]
-pub struct SimplifyTypes<P>(pub(crate) P);
-impl<'input, P> Parser<'input> for SimplifyTypes<P>
-where
-    P: Parser<'input>,
-{
-    type Output = <P as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self.0.parse(input, pos)
-    }
+// #[derive(Clone, Debug, Copy)]
+// pub struct SimplifyTypes<P>(pub(crate) P);
+// impl<'input, P> Parser<'input> for SimplifyTypes<P>
+// where
+//     P: Parser<'input>,
+// {
+//     type Output = <P as Parser<'input>>::Output;
+//     fn parse(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+//         self.0.parse(input, pos)
+//     }
 
-    fn parse_slice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.0.parse_slice(input, pos)
-    }
-}
+//     fn parse_slice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+//         self.0.parse_slice(input, pos)
+//     }
+// }
 
 #[derive(Clone, Debug, Copy)]
 pub struct DelimitedBy<L, M, R> {
@@ -1950,5 +1950,26 @@ where
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
         self().parse_slice(input, pos)
+    }
+}
+
+pub struct BoxedParser<'a, 'input, O>(pub(crate) Rc<dyn Parser<'input, Output = O> + 'a>);
+
+impl<'input, 'a, O> Parser<'input> for BoxedParser<'a, 'input, O> {
+    type Output = O;
+
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        self.0.parse(input, pos)
+    }
+    fn parse_slice(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        self.0.parse_slice(input, pos)
     }
 }
