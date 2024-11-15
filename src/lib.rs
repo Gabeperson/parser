@@ -8,8 +8,7 @@ use parser_impls::*;
 
 pub mod prelude {
     pub use super::parser_impls::{
-        /*choice,*/ expected, /* group,*/ int, Alpha, AlphaNumeric, Any1, EndOfInput,
-        ToCharRange as _,
+        choice, expected, group, int, Alpha, AlphaNumeric, Any1, EndOfInput, ToCharRange as _,
     };
     pub use super::span::Span;
     pub use super::Parser;
@@ -17,17 +16,17 @@ pub mod prelude {
 }
 
 #[derive(Debug)]
-pub struct ParseError {
-    pub message: ErrorMessage,
+pub struct ParseError<'input> {
+    pub message: ErrorMessage<'input>,
     pub span_or_pos: SpanOrPos,
     pub kind: ParseErrorType,
 }
 
 #[derive(Debug)]
-pub enum ErrorMessage {
+pub enum ErrorMessage<'input> {
     Custom(String),
     ExpectedEOF {
-        remaining: usize,
+        remaining: &'input str,
     },
     ExpectedOtherToken {
         expected: Vec<String>,
@@ -35,10 +34,11 @@ pub enum ErrorMessage {
     TooFewItems {
         expected_at_least: usize,
         found: usize,
-        err: Box<ParseError>,
+        err: Box<ParseError<'input>>,
     },
 }
-impl std::fmt::Display for ErrorMessage {
+
+impl<'input> std::fmt::Display for ErrorMessage<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorMessage::Custom(s) => write!(f, "{}", s),
@@ -69,7 +69,7 @@ impl std::fmt::Display for ErrorMessage {
         }
     }
 }
-impl std::fmt::Display for ParseError {
+impl<'input> std::fmt::Display for ParseError<'input> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.span_or_pos {
             SpanOrPos::Span(span) => write!(
@@ -120,36 +120,40 @@ pub struct ParseOutput<Output> {
 
 // Iterator methods
 
-pub trait Parser<'input, O> {
-    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError>;
+pub trait Parser<'input> {
+    type Output;
+    fn parse(
+        &self,
+        input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
     fn parse_slice(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError>;
-    fn parse_to_end(&self, input: &'input str) -> Result<O, ParseError> {
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+    fn parse_to_end(&self, input: &'input str) -> Result<Self::Output, ParseError<'input>> {
         let ParseOutput { output, pos, .. } = self.parse(input, 0)?;
         if !input[pos..].is_empty() {
             return Err(ParseError {
-                message: ErrorMessage::ExpectedEOF { remaining: pos },
+                message: ErrorMessage::ExpectedEOF {
+                    remaining: &input[pos..],
+                },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Cut,
             });
         }
         Ok(output)
     }
-    fn to_span(self) -> ToSpan<Self, O>
+    fn to_span(self) -> ToSpan<Self>
     where
         Self: Sized,
     {
-        ToSpan {
-            inner: self,
-            phantomdata: PhantomData,
-        }
+        ToSpan { inner: self }
     }
     fn or<P2>(self, parser: P2) -> Or<Self, P2>
     where
-        P2: Parser<'input, O>,
+        P2: Parser<'input, Output = Self::Output>,
         Self: Sized,
     {
         Or {
@@ -157,35 +161,30 @@ pub trait Parser<'input, O> {
             second: parser,
         }
     }
-    fn and_is<P2, BR>(self, parser: P2) -> AndIs<Self, P2, BR>
+    fn and_is<P2>(self, parser: P2) -> AndIs<Self, P2>
     where
-        P2: Parser<'input, O>,
+        P2: Parser<'input>,
         Self: Sized,
     {
         AndIs {
             first: self,
             second: parser,
-            phantomdata: PhantomData,
         }
     }
-    fn not(self) -> Not<Self, O>
+    fn not(self) -> Not<Self>
     where
         Self: Sized,
     {
-        Not {
-            inner: self,
-            phantomdata: PhantomData,
-        }
+        Not { inner: self }
     }
-    fn padded_by<Pad, PadR>(self, pad: Pad) -> PaddedBy<Self, Pad, PadR>
+    fn padded_by<Pad>(self, pad: Pad) -> PaddedBy<Self, Pad>
     where
-        Pad: Parser<'input, PadR>,
+        Pad: Parser<'input>,
         Self: Sized,
     {
         PaddedBy {
             inner: self,
             padding: pad,
-            phantomdata: PhantomData,
         }
     }
     fn if_no_progress(self, fail: impl Display) -> IfNoProgress<Self>
@@ -207,9 +206,9 @@ pub trait Parser<'input, O> {
             max: usize::MAX,
         }
     }
-    fn try_map<F, Out>(self, f: F) -> TryMap<Self, F, Out, O>
+    fn try_map<F, O>(self, f: F) -> TryMap<Self, F, O>
     where
-        F: Fn(O) -> Result<Out, ParseError>,
+        F: Fn(Self::Output) -> Result<O, ParseError<'input>>,
         Self: Sized,
     {
         TryMap {
@@ -218,9 +217,9 @@ pub trait Parser<'input, O> {
             phantomdata: PhantomData,
         }
     }
-    fn try_map_with_span<F, Out>(self, f: F) -> TryMapWithSpan<Self, F, Out, O>
+    fn try_map_with_span<F, O>(self, f: F) -> TryMapWithSpan<Self, F, O>
     where
-        F: Fn(O, Span) -> Result<Out, ParseError>,
+        F: Fn(Self::Output, Span) -> Result<O, ParseError<'input>>,
         Self: Sized,
     {
         TryMapWithSpan {
@@ -229,10 +228,9 @@ pub trait Parser<'input, O> {
             phantomdata: PhantomData,
         }
     }
-    fn separated_by<Sep, SR>(self, s: Sep) -> SeparatedBy<Self, Sep, SR>
+    fn separated_by<Sep>(self, s: Sep) -> SeparatedBy<Self, Sep>
     where
         Self: Sized,
-        Sep: Parser<'input, SR>,
     {
         SeparatedBy {
             inner: self,
@@ -240,17 +238,13 @@ pub trait Parser<'input, O> {
             max: usize::MAX,
             trailing: true,
             separator: s,
-            phantomdata: PhantomData,
         }
     }
-    fn slice(self) -> Sliced<Self, O>
+    fn slice(self) -> Sliced<Self>
     where
         Self: Sized,
     {
-        Sliced {
-            inner: self,
-            phantomdata: PhantomData,
-        }
+        Sliced { inner: self }
     }
     fn cut(self) -> Cut<Self>
     where
@@ -264,9 +258,9 @@ pub trait Parser<'input, O> {
     {
         Optional { inner: self }
     }
-    fn map<Out, F>(self, f: F) -> Map<Self, F, Out, O>
+    fn map<O, F>(self, f: F) -> Map<Self, F, O>
     where
-        F: Fn(O) -> Out,
+        F: Fn(Self::Output) -> O,
         Self: Sized,
     {
         Map {
@@ -275,19 +269,15 @@ pub trait Parser<'input, O> {
             phantomdata: PhantomData,
         }
     }
-    fn to<Out: Clone>(self, o: Out) -> To<Self, Out, O>
+    fn to<O: Clone>(self, o: O) -> To<Self, O>
     where
         Self: Sized,
     {
-        To {
-            inner: self,
-            o,
-            phantomdata: PhantomData,
-        }
+        To { inner: self, o }
     }
-    fn map_with_span<Out, F>(self, f: F) -> MapWithSpan<Self, F, Out, O>
+    fn map_with_span<O, F>(self, f: F) -> MapWithSpan<Self, F, O>
     where
-        F: Fn(O, Span) -> Out,
+        F: Fn(Self::Output, Span) -> O,
         Self: Sized,
     {
         MapWithSpan {
@@ -296,43 +286,38 @@ pub trait Parser<'input, O> {
             phantomdata: PhantomData,
         }
     }
-    fn ignore_then<Parser2>(self, next: Parser2) -> IgnoreThen<Self, Parser2, O>
+    fn ignore_then<Parser2>(self, next: Parser2) -> IgnoreThen<Self, Parser2>
     where
-        Parser2: Parser<'input, O>,
+        Parser2: Parser<'input>,
         Self: Sized,
     {
         IgnoreThen {
             first: self,
             second: next,
-            phantomdata: PhantomData,
         }
     }
 
-    fn then_ignore<Parser2, BR>(self, next: Parser2) -> ThenIgnore<Self, Parser2, BR>
+    fn then_ignore<Parser2>(self, next: Parser2) -> ThenIgnore<Self, Parser2>
     where
-        Parser2: Parser<'input, BR>,
+        Parser2: Parser<'input>,
         Self: Sized,
     {
         ThenIgnore {
             first: self,
             second: next,
-            phantomdata: PhantomData,
         }
     }
 
-    fn ignored(self) -> Ignored<Self, O>
+    fn ignored(self) -> Ignored<Self>
     where
         Self: Sized,
     {
-        Ignored {
-            parser: self,
-            phantomdata: PhantomData,
-        }
+        Ignored { parser: self }
     }
 
     fn then<Parser2>(self, next: Parser2) -> Then<Self, Parser2>
     where
-        Parser2: Parser<'input, O>,
+        Parser2: Parser<'input>,
         Self: Sized,
     {
         Then {
@@ -341,21 +326,20 @@ pub trait Parser<'input, O> {
         }
     }
 
-    fn delimited_by<Parser2, Parser3, LR, RR>(
+    fn delimited_by<Parser2, Parser3>(
         self,
         left: Parser2,
         right: Parser3,
-    ) -> DelimitedBy<Parser2, Self, Parser3, LR, RR>
+    ) -> DelimitedBy<Parser2, Self, Parser3>
     where
-        Parser2: Parser<'input, LR>,
-        Parser3: Parser<'input, RR>,
+        Parser2: Parser<'input>,
+        Parser3: Parser<'input>,
         Self: Sized,
     {
         DelimitedBy {
             left,
             middle: self,
             right,
-            phantomdata: PhantomData,
         }
     }
 
@@ -370,11 +354,12 @@ pub trait Parser<'input, O> {
     // where
     //     Self: Sized,
     // {
-    //     SimplifyTypes(self) // }
+    //     SimplifyTypes(self)
+    // }
 
-    fn boxed(self) -> BoxedParser<'input, O>
+    fn boxed<'a>(self) -> BoxedParser<'a, 'input, Self::Output>
     where
-        Self: Sized + 'static,
+        Self: Sized + 'a,
     {
         BoxedParser(Rc::new(self))
     }
