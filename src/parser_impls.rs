@@ -2,21 +2,16 @@ use std::{fmt::Display, marker::PhantomData, ops::RangeInclusive, rc::Rc};
 
 use super::*;
 #[derive(Clone, Debug, Copy)]
-pub struct Not<P> {
+pub struct Not<P, T> {
     pub(crate) inner: P,
+    pub(crate) phantomdata: PhantomData<T>,
 }
 
-impl<'input, P> Parser<'input> for Not<P>
+impl<'input, P, T> Parser<'input, ()> for Not<P, T>
 where
-    P: Parser<'input>,
+    P: Parser<'input, T>,
 {
-    type Output = ();
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<()>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Err(ParseError {
                 message: ErrorMessage::Custom(
@@ -37,7 +32,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Err(ParseError {
                 message: ErrorMessage::Custom(
@@ -80,17 +75,11 @@ impl<P> Repeated<P> {
     }
 }
 
-impl<'input, P> Parser<'input> for Repeated<P>
+impl<'input, P, T> Parser<'input, Vec<T>> for Repeated<P>
 where
-    P: Parser<'input>,
+    P: Parser<'input, T>,
 {
-    type Output = Vec<P::Output>;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<Vec<T>>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -132,7 +121,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -173,15 +162,16 @@ where
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct SeparatedBy<P, S> {
+pub struct SeparatedBy<P, S, SR> {
     pub(crate) inner: P,
     pub(crate) min: usize,
     pub(crate) max: usize,
     pub(crate) trailing: bool,
     pub(crate) separator: S,
+    pub(crate) phantomdata: PhantomData<SR>,
 }
 
-impl<P, S> SeparatedBy<P, S> {
+impl<P, S, SR> SeparatedBy<P, S, SR> {
     pub fn at_least(self, min: usize) -> Self {
         Self { min, ..self }
     }
@@ -199,18 +189,12 @@ impl<P, S> SeparatedBy<P, S> {
     }
 }
 
-impl<'input, P, S> Parser<'input> for SeparatedBy<P, S>
+impl<'input, P, S, SR, PR> Parser<'input, Vec<PR>> for SeparatedBy<P, S, SR>
 where
-    P: Parser<'input>,
-    S: Parser<'input>,
+    P: Parser<'input, PR>,
+    S: Parser<'input, SR>,
 {
-    type Output = Vec<P::Output>;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<Vec<PR>>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -276,7 +260,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -340,21 +324,20 @@ where
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct Sliced<P> {
+pub struct Sliced<P, T> {
     pub(crate) inner: P,
+    pub(crate) phantomdata: PhantomData<T>,
 }
 
-impl<'input, P> Parser<'input> for Sliced<P>
+impl<'input, P, T> Parser<'input, &'input str> for Sliced<P, T>
 where
-    P: Parser<'input>,
+    P: Parser<'input, T>,
 {
-    type Output = &'input str;
-
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 
@@ -362,7 +345,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse(input, pos)
     }
 }
@@ -373,18 +356,12 @@ pub struct Or<P, P2> {
     pub(crate) second: P2,
 }
 
-impl<'input, P, P2> Parser<'input> for Or<P, P2>
+impl<'input, P, P2, PO> Parser<'input, PO> for Or<P, P2>
 where
-    P: Parser<'input>,
-    P2: Parser<'input, Output = P::Output>,
+    P: Parser<'input, PO>,
+    P2: Parser<'input, PO>,
 {
-    type Output = P::Output;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<PO>, ParseError> {
         let e = match self.first.parse(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
@@ -412,7 +389,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let e = match self.first.parse_slice(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
@@ -442,17 +419,11 @@ pub struct Cut<P> {
     pub(crate) inner: P,
 }
 
-impl<'input, P> Parser<'input> for Cut<P>
+impl<'input, P, O> Parser<'input, O> for Cut<P>
 where
-    P: Parser<'input>,
+    P: Parser<'input, O>,
 {
-    type Output = P::Output;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         self.inner.parse(input, pos).map_err(|mut e| {
             e.kind = ParseErrorType::Cut;
             e
@@ -463,7 +434,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos).map_err(|mut e| {
             e.kind = ParseErrorType::Cut;
             e
@@ -476,17 +447,11 @@ pub struct Optional<P> {
     pub(crate) inner: P,
 }
 
-impl<'input, P> Parser<'input> for Optional<P>
+impl<'input, P, O> Parser<'input, Option<O>> for Optional<P>
 where
-    P: Parser<'input>,
+    P: Parser<'input, O>,
 {
-    type Output = Option<P::Output>;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<Option<O>>, ParseError> {
         Ok(match self.inner.parse(input, pos) {
             Ok(ParseOutput { output, span, pos }) => ParseOutput {
                 output: Some(output),
@@ -508,7 +473,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         Ok(self.inner.parse_slice(input, pos).unwrap_or(ParseOutput {
             output: "",
             span: Span {
@@ -520,23 +485,18 @@ where
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct To<P, O> {
+pub struct To<P, O, T> {
     pub(crate) inner: P,
     pub(crate) o: O,
+    pub(crate) phantomdata: PhantomData<T>,
 }
 
-impl<'input, P, O> Parser<'input> for To<P, O>
+impl<'input, P, O, T> Parser<'input, O> for To<P, O, T>
 where
-    P: Parser<'input>,
+    P: Parser<'input, T>,
     O: Clone,
 {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput { span, pos, .. } = self.inner.parse(input, pos)?;
         Ok(ParseOutput {
             output: self.o.clone(),
@@ -549,29 +509,23 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct Map<P, F, O> {
+pub struct Map<P, F, O, T> {
     pub(crate) inner: P,
     pub(crate) f: F,
-    pub(crate) phantomdata: PhantomData<O>,
+    pub(crate) phantomdata: PhantomData<(O, T)>,
 }
 
-impl<'input, P, F, O> Parser<'input> for Map<P, F, O>
+impl<'input, P, F, O, T> Parser<'input, O> for Map<P, F, O, T>
 where
-    P: Parser<'input>,
-    F: Fn(P::Output) -> O,
+    P: Parser<'input, T>,
+    F: Fn(T) -> O,
 {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output);
@@ -582,30 +536,24 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct TryMap<P, F, O> {
+pub struct TryMap<P, F, O, T> {
     pub(crate) inner: P,
     pub(crate) f: F,
-    pub(crate) phantomdata: PhantomData<O>,
+    pub(crate) phantomdata: PhantomData<(O, T)>,
 }
 
-impl<'input, P, F, O> Parser<'input> for TryMap<P, F, O>
+impl<'input, P, F, O, T> Parser<'input, O> for TryMap<P, F, O, T>
 where
-    P: Parser<'input>,
-    F: Fn(P::Output) -> Result<O, ParseError<'input>>,
+    P: Parser<'input, T>,
+    F: Fn(T) -> Result<O, ParseError>,
 {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output);
@@ -620,30 +568,24 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct TryMapWithSpan<P, F, O> {
+pub struct TryMapWithSpan<P, F, O, T> {
     pub(crate) inner: P,
     pub(crate) f: F,
-    pub(crate) phantomdata: PhantomData<O>,
+    pub(crate) phantomdata: PhantomData<(O, T)>,
 }
 
-impl<'input, P, F, O> Parser<'input> for TryMapWithSpan<P, F, O>
+impl<'input, P, F, O, T> Parser<'input, O> for TryMapWithSpan<P, F, O, T>
 where
-    P: Parser<'input>,
-    F: Fn(P::Output, Span) -> Result<O, ParseError<'input>>,
+    P: Parser<'input, T>,
+    F: Fn(T, Span) -> Result<O, ParseError>,
 {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output, span);
@@ -658,30 +600,24 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct MapWithSpan<P, F, O> {
+pub struct MapWithSpan<P, F, O, T> {
     pub(crate) inner: P,
     pub(crate) f: F,
-    pub(crate) phantomdata: PhantomData<O>,
+    pub(crate) phantomdata: PhantomData<(O, T)>,
 }
 
-impl<'input, P, F, O> Parser<'input> for MapWithSpan<P, F, O>
+impl<'input, P, F, O, T> Parser<'input, O> for MapWithSpan<P, F, O, T>
 where
-    P: Parser<'input>,
-    F: Fn(P::Output, Span) -> O,
+    P: Parser<'input, T>,
+    F: Fn(T, Span) -> O,
 {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output, span);
@@ -692,7 +628,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -702,16 +638,11 @@ pub struct Labelled<P> {
     pub(crate) inner: P,
     pub(crate) label: &'static str,
 }
-impl<'input, P> Parser<'input> for Labelled<P>
+impl<'input, P, O> Parser<'input, O> for Labelled<P>
 where
-    P: Parser<'input>,
+    P: Parser<'input, O>,
 {
-    type Output = <P as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
@@ -729,7 +660,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
@@ -755,7 +686,7 @@ where
 //         &self,
 //         input: &'input str,
 //         pos: usize,
-//     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
 //         self.0.parse(input, pos)
 //     }
 
@@ -763,30 +694,26 @@ where
 //         &self,
 //         input: &'input str,
 //         pos: usize,
-//     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
 //         self.0.parse_slice(input, pos)
 //     }
 // }
 
 #[derive(Clone, Debug, Copy)]
-pub struct DelimitedBy<L, M, R> {
+pub struct DelimitedBy<L, M, R, LR, RR> {
     pub(crate) left: L,
     pub(crate) middle: M,
     pub(crate) right: R,
+    pub(crate) phantomdata: PhantomData<(LR, RR)>,
 }
 
-impl<'input, L, M, R> Parser<'input> for DelimitedBy<L, M, R>
+impl<'input, L, M, R, O, LR, RR> Parser<'input, O> for DelimitedBy<L, M, R, LR, RR>
 where
-    L: Parser<'input>,
-    M: Parser<'input>,
-    R: Parser<'input>,
+    L: Parser<'input, LR>,
+    M: Parser<'input, O>,
+    R: Parser<'input, RR>,
 {
-    type Output = <M as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.left.parse(input, pos)?;
@@ -808,7 +735,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.left.parse_slice(input, pos)?;
@@ -827,22 +754,18 @@ where
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct PaddedBy<P, Pad> {
+pub struct PaddedBy<P, Pad, PadR> {
     pub(crate) inner: P,
     pub(crate) padding: Pad,
+    pub(crate) phantomdata: PhantomData<PadR>,
 }
 
-impl<'input, P, Pad> Parser<'input> for PaddedBy<P, Pad>
+impl<'input, P, Pad, PR, PadR> Parser<'input, PR> for PaddedBy<P, Pad, PadR>
 where
-    P: Parser<'input>,
-    Pad: Parser<'input>,
+    P: Parser<'input, PR>,
+    Pad: Parser<'input, PadR>,
 {
-    type Output = <P as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<PR>, ParseError> {
         let parse_padding = |pos| {
             self.padding
                 .parse(input, pos)
@@ -866,7 +789,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let parse_padding = |pos| {
             self.padding
                 .parse_slice(input, pos)
@@ -888,22 +811,18 @@ where
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct IgnoreThen<A, B> {
+pub struct IgnoreThen<A, B, AR> {
     pub(crate) first: A,
     pub(crate) second: B,
+    pub(crate) phantomdata: PhantomData<AR>,
 }
 
-impl<'input, A, B> Parser<'input> for IgnoreThen<A, B>
+impl<'input, A, B, AR, BR> Parser<'input, BR> for IgnoreThen<A, B, AR>
 where
-    A: Parser<'input>,
-    B: Parser<'input>,
+    A: Parser<'input, AR>,
+    B: Parser<'input, BR>,
 {
-    type Output = <B as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<BR>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.first.parse(input, pos)?;
@@ -925,7 +844,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.first.parse_slice(input, pos)?;
@@ -946,22 +865,18 @@ where
 }
 
 #[derive(Clone, Debug, Copy)]
-pub struct ThenIgnore<A, B> {
+pub struct ThenIgnore<A, B, BR> {
     pub(crate) first: A,
     pub(crate) second: B,
+    pub(crate) phantomdata: PhantomData<BR>,
 }
 
-impl<'input, A, B> Parser<'input> for ThenIgnore<A, B>
+impl<'input, A, B, AR, BR> Parser<'input, AR> for ThenIgnore<A, B, BR>
 where
-    A: Parser<'input>,
-    B: Parser<'input>,
+    A: Parser<'input, AR>,
+    B: Parser<'input, BR>,
 {
-    type Output = <A as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<AR>, ParseError> {
         let ParseOutput {
             output,
             pos,
@@ -984,7 +899,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             output,
             pos,
@@ -1004,22 +919,18 @@ where
     }
 }
 #[derive(Clone, Debug, Copy)]
-pub struct AndIs<A, B> {
+pub struct AndIs<A, B, BR> {
     pub(crate) first: A,
     pub(crate) second: B,
+    pub(crate) phantomdata: PhantomData<BR>,
 }
 
-impl<'input, A, B> Parser<'input> for AndIs<A, B>
+impl<'input, A, B, AR, BR> Parser<'input, AR> for AndIs<A, B, BR>
 where
-    A: Parser<'input>,
-    B: Parser<'input>,
+    A: Parser<'input, AR>,
+    B: Parser<'input, BR>,
 {
-    type Output = <A as Parser<'input>>::Output;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<AR>, ParseError> {
         let ParseOutput { output, pos, span } = self.first.parse(input, pos)?;
         self.second.parse(input, pos)?;
         Ok(ParseOutput { pos, span, output })
@@ -1029,7 +940,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput { output, pos, span } = self.first.parse_slice(input, pos)?;
         self.second.parse_slice(input, pos)?;
         Ok(ParseOutput { pos, span, output })
@@ -1037,20 +948,16 @@ where
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Ignored<A> {
+pub struct Ignored<A, O> {
     pub(crate) parser: A,
+    pub(crate) phantomdata: PhantomData<O>,
 }
 
-impl<'input, A> Parser<'input> for Ignored<A>
+impl<'input, A, O> Parser<'input, ()> for Ignored<A, O>
 where
-    A: Parser<'input>,
+    A: Parser<'input, O>,
 {
-    type Output = ();
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<()>, ParseError> {
         let ParseOutput { pos, span, .. } = self.parser.parse(input, pos)?;
         Ok(ParseOutput {
             output: (),
@@ -1063,26 +970,22 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parser.parse_slice(input, pos)
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ToSpan<A> {
+pub struct ToSpan<A, T> {
     pub(crate) inner: A,
+    pub(crate) phantomdata: PhantomData<T>,
 }
 
-impl<'input, A> Parser<'input> for ToSpan<A>
+impl<'input, A, T> Parser<'input, Span> for ToSpan<A, T>
 where
-    A: Parser<'input>,
+    A: Parser<'input, T>,
 {
-    type Output = Span;
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<Span>, ParseError> {
         let ParseOutput { pos, span, .. } = self.inner.parse(input, pos)?;
         Ok(ParseOutput {
             output: span,
@@ -1095,7 +998,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -1106,17 +1009,12 @@ pub struct Then<A, B> {
     pub(crate) second: B,
 }
 
-impl<'input, A, B> Parser<'input> for Then<A, B>
+impl<'input, A, B, AR, BR> Parser<'input, (AR, BR)> for Then<A, B>
 where
-    A: Parser<'input>,
-    B: Parser<'input>,
+    A: Parser<'input, AR>,
+    B: Parser<'input, BR>,
 {
-    type Output = (<A as Parser<'input>>::Output, <B as Parser<'input>>::Output);
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<(AR, BR)>, ParseError> {
         let ParseOutput {
             output: output1,
             pos,
@@ -1141,7 +1039,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             output: _output1,
             pos: pos1,
@@ -1163,13 +1061,12 @@ where
     }
 }
 
-impl<'input, 'r> Parser<'input> for &'r str {
-    type Output = &'input str;
+impl<'input, 'r> Parser<'input, &'input str> for &'r str {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1177,7 +1074,7 @@ impl<'input, 'r> Parser<'input> for &'r str {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input[pos..].starts_with(self) {
             Ok(ParseOutput {
                 output: &input[pos..pos + self.len()],
@@ -1202,13 +1099,8 @@ impl<'input, 'r> Parser<'input> for &'r str {
 #[derive(Clone, Debug, Copy)]
 pub struct EndOfInput;
 
-impl<'input> Parser<'input> for EndOfInput {
-    type Output = ();
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+impl<'input> Parser<'input, ()> for EndOfInput {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<()>, ParseError> {
         if input.len() == pos {
             Ok(ParseOutput {
                 output: (),
@@ -1217,9 +1109,7 @@ impl<'input> Parser<'input> for EndOfInput {
             })
         } else {
             Err(ParseError {
-                message: ErrorMessage::ExpectedEOF {
-                    remaining: &input[pos..],
-                },
+                message: ErrorMessage::ExpectedEOF { remaining: pos },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             })
@@ -1230,7 +1120,7 @@ impl<'input> Parser<'input> for EndOfInput {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input.len() == pos {
             Ok(ParseOutput {
                 output: "",
@@ -1239,9 +1129,7 @@ impl<'input> Parser<'input> for EndOfInput {
             })
         } else {
             Err(ParseError {
-                message: ErrorMessage::ExpectedEOF {
-                    remaining: &input[pos..],
-                },
+                message: ErrorMessage::ExpectedEOF { remaining: pos },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             })
@@ -1257,14 +1145,12 @@ pub fn int(radix: u32) -> IntParser {
 #[derive(Clone, Debug, Copy)]
 pub struct IntParser(u32);
 
-impl<'input> Parser<'input> for IntParser {
-    type Output = &'input str;
-
+impl<'input> Parser<'input, &'input str> for IntParser {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1272,7 +1158,7 @@ impl<'input> Parser<'input> for IntParser {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let mut end = pos;
         for (i, c) in input[pos..].char_indices() {
             if c.is_digit(self.0) {
@@ -1302,14 +1188,12 @@ impl<'input> Parser<'input> for IntParser {
 #[derive(Clone, Debug, Copy)]
 pub struct Alpha;
 
-impl<'input> Parser<'input> for Alpha {
-    type Output = &'input str;
-
+impl<'input> Parser<'input, &'input str> for Alpha {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1317,7 +1201,7 @@ impl<'input> Parser<'input> for Alpha {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if c.is_alphabetic() {
                 return Ok(ParseOutput {
@@ -1339,14 +1223,12 @@ impl<'input> Parser<'input> for Alpha {
 #[derive(Clone, Debug, Copy)]
 pub struct AlphaNumeric;
 
-impl<'input> Parser<'input> for AlphaNumeric {
-    type Output = &'input str;
-
+impl<'input> Parser<'input, &'input str> for AlphaNumeric {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1354,7 +1236,7 @@ impl<'input> Parser<'input> for AlphaNumeric {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if c.is_alphanumeric() {
                 return Ok(ParseOutput {
@@ -1376,14 +1258,12 @@ impl<'input> Parser<'input> for AlphaNumeric {
 #[derive(Clone, Debug, Copy)]
 pub struct Any1;
 
-impl<'input> Parser<'input> for Any1 {
-    type Output = &'input str;
-
+impl<'input> Parser<'input, &'input str> for Any1 {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1391,7 +1271,7 @@ impl<'input> Parser<'input> for Any1 {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input[pos..].chars().next().is_some() {
             return Ok(ParseOutput {
                 output: &input[pos..pos + 1],
@@ -1452,14 +1332,12 @@ impl CharRange {
     }
 }
 
-impl<'input> Parser<'input> for CharRange {
-    type Output = &'input str;
-
+impl<'input> Parser<'input, &'input str> for CharRange {
     fn parse(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1467,7 +1345,7 @@ impl<'input> Parser<'input> for CharRange {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if self.contains(&c) {
                 return Ok(ParseOutput {
@@ -1497,17 +1375,11 @@ pub fn expected<T>(token: impl Display) -> Expected<T> {
 #[derive(Debug, Clone)]
 pub struct Expected<T> {
     token: String,
-    phantomdata: PhantomData<T>,
+    pub(crate) phantomdata: PhantomData<T>,
 }
 
-impl<'input, T> Parser<'input> for Expected<T> {
-    type Output = T;
-
-    fn parse(
-        &self,
-        _input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+impl<'input, T> Parser<'input, T> for Expected<T> {
+    fn parse(&self, _input: &'input str, pos: usize) -> Result<ParseOutput<T>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
                 expected: vec![self.token.clone()],
@@ -1521,7 +1393,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
         &self,
         _input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
                 expected: vec![self.token.clone()],
@@ -1538,17 +1410,11 @@ pub struct IfNoProgress<P> {
     pub(crate) fail: String,
 }
 
-impl<'input, P> Parser<'input> for IfNoProgress<P>
+impl<'input, P, O> Parser<'input, O> for IfNoProgress<P>
 where
-    P: Parser<'input>,
+    P: Parser<'input, O>,
 {
-    type Output = P::Output;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(ParseError {
@@ -1567,7 +1433,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(ParseError {
@@ -1583,399 +1449,393 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Choice<P> {
-    inner: P,
-}
+// #[derive(Clone, Copy, Debug)]
+// pub struct Choice<P> {
+//     inner: P,
+// }
 
-impl<'input, P> Parser<'input> for Choice<P>
-where
-    P: ChoiceImpl<'input>,
-{
-    type Output = P::Output;
+// impl<'input, P> Parser<'input> for Choice<P>
+// where
+//     P: ChoiceImpl<'input>,
+// {
+//     type Output = P::Output;
 
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self.inner.parse_choice(input, pos)
-    }
+//     fn parse(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//         self.inner.parse_choice(input, pos)
+//     }
 
-    fn parse_slice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.inner.parse_slice_choice(input, pos)
-    }
-}
+//     fn parse_slice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
+//         self.inner.parse_slice_choice(input, pos)
+//     }
+// }
 
-pub trait ChoiceImpl<'input> {
-    #[doc(hidden)]
-    type Output;
-    #[doc(hidden)]
-    fn parse_choice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
-    #[doc(hidden)]
-    fn parse_slice_choice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
-}
-pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
-    Choice { inner: between }
-}
+// pub trait ChoiceImpl<'input> {
+//     #[doc(hidden)]
+//     type Output;
+//     #[doc(hidden)]
+//     fn parse_choice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError>;
+//     #[doc(hidden)]
+//     fn parse_slice_choice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError>;
+// }
+// pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
+//     Choice { inner: between }
+// }
 
-impl<'input, P> ChoiceImpl<'input> for P
-where
-    P: Parser<'input>,
-{
-    type Output = P::Output;
+// impl<'input, P> ChoiceImpl<'input> for P
+// where
+//     P: Parser<'input>,
+// {
+//     type Output = P::Output;
 
-    fn parse_choice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self.parse(input, pos)
-    }
+//     fn parse_choice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//         self.parse(input, pos)
+//     }
 
-    fn parse_slice_choice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.parse_slice(input, pos)
-    }
-}
+//     fn parse_slice_choice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
+//         self.parse_slice(input, pos)
+//     }
+// }
 
-macro_rules! impl_choice {
-    ($($type:ident,)+) => {
-        impl<'input, T, $($type),+> ChoiceImpl<'input> for ($($type,)+)
-        where
-            $($type: ChoiceImpl<'input, Output = T>),+
-        {
-            type Output = T;
+// macro_rules! impl_choice {
+//     ($($type:ident,)+) => {
+//         impl<'input, T, $($type),+> ChoiceImpl<'input> for ($($type,)+)
+//         where
+//             $($type: ChoiceImpl<'input, Output = T>),+
+//         {
+//             type Output = T;
 
-            fn parse_choice(
-                &self,
-                input: &'input str,
-                pos: usize,
-            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-                // Cursed, but it works
-                #[allow(non_snake_case)]
-                let ($($type,)+) = self;
-                $(
-                #[allow(non_snake_case)]
-                let $type = match $type.parse_choice(input, pos) {
-                    Ok(o) => return Ok(o),
-                    e @ Err(ParseError {
-                        kind: ParseErrorType::Cut,
-                        ..
-                    }) => return e,
-                    Err(e) => e,
-                };
-                )+
-                #[allow(non_snake_case)]
-                Err([$($type,)+]
-                    .into_iter()
-                    .max_by_key(|e| e.span_or_pos.end())
-                    .expect("There is at least 1 in this array"))
-            }
+//             fn parse_choice(
+//                 &self,
+//                 input: &'input str,
+//                 pos: usize,
+//             ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//                 // Cursed, but it works
+//                 #[allow(non_snake_case)]
+//                 let ($($type,)+) = self;
+//                 $(
+//                 #[allow(non_snake_case)]
+//                 let $type = match $type.parse_choice(input, pos) {
+//                     Ok(o) => return Ok(o),
+//                     e @ Err(ParseError {
+//                         kind: ParseErrorType::Cut,
+//                         ..
+//                     }) => return e,
+//                     Err(e) => e,
+//                 };
+//                 )+
+//                 #[allow(non_snake_case)]
+//                 Err([$($type,)+]
+//                     .into_iter()
+//                     .max_by_key(|e| e.span_or_pos.end())
+//                     .expect("There is at least 1 in this array"))
+//             }
 
-            fn parse_slice_choice(
-                &self,
-                input: &'input str,
-                pos: usize,
-            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-                // Cursed, but it works
-                #[allow(non_snake_case)]
-                let ($($type,)+) = self;
-                $(
-                #[allow(non_snake_case)]
-                let $type = match $type.parse_slice_choice(input, pos) {
-                    Ok(o) => return Ok(o),
-                    e @ Err(ParseError {
-                        kind: ParseErrorType::Cut,
-                        ..
-                    }) => return e,
-                    Err(e) => e,
-                };
-                )+
-                #[allow(non_snake_case)]
-                Err([$($type,)+]
-                    .into_iter()
-                    .max_by_key(|e| e.span_or_pos.end())
-                    .expect("There is at least 1 in this array"))
-            }
-        }
-    };
-}
+//             fn parse_slice_choice(
+//                 &self,
+//                 input: &'input str,
+//                 pos: usize,
+//             ) -> Result<ParseOutput<&'input str>, ParseError> {
+//                 // Cursed, but it works
+//                 #[allow(non_snake_case)]
+//                 let ($($type,)+) = self;
+//                 $(
+//                 #[allow(non_snake_case)]
+//                 let $type = match $type.parse_slice_choice(input, pos) {
+//                     Ok(o) => return Ok(o),
+//                     e @ Err(ParseError {
+//                         kind: ParseErrorType::Cut,
+//                         ..
+//                     }) => return e,
+//                     Err(e) => e,
+//                 };
+//                 )+
+//                 #[allow(non_snake_case)]
+//                 Err([$($type,)+]
+//                     .into_iter()
+//                     .max_by_key(|e| e.span_or_pos.end())
+//                     .expect("There is at least 1 in this array"))
+//             }
+//         }
+//     };
+// }
 
-impl_choice!(A,);
-impl_choice!(A, B,);
-impl_choice!(A, B, C,);
-impl_choice!(A, B, C, D,);
-impl_choice!(A, B, C, D, E,);
-impl_choice!(A, B, C, D, E, F,);
-impl_choice!(A, B, C, D, E, F, G,);
-impl_choice!(A, B, C, D, E, F, G, H,);
-impl_choice!(A, B, C, D, E, F, G, H, I,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X,);
-impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X, Y, Z,);
+// impl_choice!(A,);
+// impl_choice!(A, B,);
+// impl_choice!(A, B, C,);
+// impl_choice!(A, B, C, D,);
+// impl_choice!(A, B, C, D, E,);
+// impl_choice!(A, B, C, D, E, F,);
+// impl_choice!(A, B, C, D, E, F, G,);
+// impl_choice!(A, B, C, D, E, F, G, H,);
+// impl_choice!(A, B, C, D, E, F, G, H, I,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X,);
+// impl_choice!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, U, V, W, X, Y, Z,);
 
-#[derive(Clone, Copy, Debug)]
-pub struct Group<P> {
-    inner: P,
-}
+// #[derive(Clone, Copy, Debug)]
+// pub struct Group<P> {
+//     inner: P,
+// }
 
-impl<'input, P> Parser<'input> for Group<P>
-where
-    P: GroupImpl<'input>,
-{
-    type Output = P::Output;
+// impl<'input, P> Parser<'input> for Group<P>
+// where
+//     P: GroupImpl<'input>,
+// {
+//     type Output = P::Output;
 
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self.inner.parse_group(input, pos)
-    }
+//     fn parse(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//         self.inner.parse_group(input, pos)
+//     }
 
-    fn parse_slice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.inner.parse_slice_group(input, pos)
-    }
-}
+//     fn parse_slice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
+//         self.inner.parse_slice_group(input, pos)
+//     }
+// }
 
-pub trait GroupImpl<'input> {
-    #[doc(hidden)]
-    type Output;
-    #[doc(hidden)]
-    fn parse_group(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
-    #[doc(hidden)]
-    fn parse_slice_group(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
-}
+// pub trait GroupImpl<'input> {
+//     #[doc(hidden)]
+//     type Output;
+//     #[doc(hidden)]
+//     fn parse_group(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError>;
+//     #[doc(hidden)]
+//     fn parse_slice_group(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError>;
+// }
 
-pub fn group<'input, P: GroupImpl<'input>>(group: P) -> Group<P> {
-    Group { inner: group }
-}
+// pub fn group<'input, P: GroupImpl<'input>>(group: P) -> Group<P> {
+//     Group { inner: group }
+// }
 
-impl<'input, P> GroupImpl<'input> for P
-where
-    P: Parser<'input>,
-{
-    type Output = P::Output;
+// impl<'input, P> GroupImpl<'input> for P
+// where
+//     P: Parser<'input>,
+// {
+//     type Output = P::Output;
 
-    fn parse_group(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self.parse(input, pos)
-    }
+//     fn parse_group(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//         self.parse(input, pos)
+//     }
 
-    fn parse_slice_group(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self.parse_slice(input, pos)
-    }
-}
+//     fn parse_slice_group(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
+//         self.parse_slice(input, pos)
+//     }
+// }
 
-macro_rules! impl_group {
-    ($(($type:ident, $output:ident),)+) => {
-        impl<'input, $($type),+> GroupImpl<'input> for ($($type,)+)
-        where
-            $($type: GroupImpl<'input>),+
-        {
-            type Output = ($($type::Output,)+);
+// macro_rules! impl_group {
+//     ($(($type:ident, $output:ident),)+) => {
+//         impl<'input, $($type),+> GroupImpl<'input> for ($($type,)+)
+//         where
+//             $($type: GroupImpl<'input>),+
+//         {
+//             type Output = ($($type::Output,)+);
 
-            fn parse_group(
-                &self,
-                input: &'input str,
-                pos: usize,
-            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-                // Cursed, but it works
-                #[allow(non_snake_case)]
-                let ($($type,)+) = self;
-                let initial_pos = pos;
-                $(
-                #[allow(non_snake_case)]
-                let ParseOutput {
-                    output: $output,
-                    pos,
-                    span: _,
-                } = $type.parse_group(input, pos)?;
-                )+
-                Ok(ParseOutput {
-                    output: ($($output,)+),
-                    pos,
-                    span: Span {
-                        start: initial_pos,
-                        end: pos,
-                    },
-                })
-            }
+//             fn parse_group(
+//                 &self,
+//                 input: &'input str,
+//                 pos: usize,
+//             ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//                 // Cursed, but it works
+//                 #[allow(non_snake_case)]
+//                 let ($($type,)+) = self;
+//                 let initial_pos = pos;
+//                 $(
+//                 #[allow(non_snake_case)]
+//                 let ParseOutput {
+//                     output: $output,
+//                     pos,
+//                     span: _,
+//                 } = $type.parse_group(input, pos)?;
+//                 )+
+//                 Ok(ParseOutput {
+//                     output: ($($output,)+),
+//                     pos,
+//                     span: Span {
+//                         start: initial_pos,
+//                         end: pos,
+//                     },
+//                 })
+//             }
 
-            fn parse_slice_group(
-                &self,
-                input: &'input str,
-                pos: usize,
-            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-                // Cursed, but it works
-                #[allow(non_snake_case)]
-                let ($($type,)+) = self;
-                let initial_pos = pos;
-                $(
-                #[allow(non_snake_case)]
-                let ParseOutput {
-                    output: _,
-                    pos,
-                    span: _,
-                } = $type.parse_slice_group(input, pos)?;
-                )+
-                Ok(ParseOutput {
-                    output: &input[initial_pos..pos],
-                    pos,
-                    span: Span {
-                        start: initial_pos,
-                        end: pos,
-                    },
-                })
-            }
-        }
-    };
-}
+//             fn parse_slice_group(
+//                 &self,
+//                 input: &'input str,
+//                 pos: usize,
+//             ) -> Result<ParseOutput<&'input str>, ParseError> {
+//                 // Cursed, but it works
+//                 #[allow(non_snake_case)]
+//                 let ($($type,)+) = self;
+//                 let initial_pos = pos;
+//                 $(
+//                 #[allow(non_snake_case)]
+//                 let ParseOutput {
+//                     output: _,
+//                     pos,
+//                     span: _,
+//                 } = $type.parse_slice_group(input, pos)?;
+//                 )+
+//                 Ok(ParseOutput {
+//                     output: &input[initial_pos..pos],
+//                     pos,
+//                     span: Span {
+//                         start: initial_pos,
+//                         end: pos,
+//                     },
+//                 })
+//             }
+//         }
+//     };
+// }
 
 // Oh the things we do for variadics...
-#[rustfmt::skip]
-impl_group!((A, AO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO),);
-#[rustfmt::skip]
-impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO), (Y, YO), (Z, ZO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO),);
+// #[rustfmt::skip]
+// impl_group!((A, AO), (B, BO), (C, CO), (D, DO), (E, EO), (F, FO), (G, GO), (H, HO), (I, IO), (J, JO), (K, KO), (L, LO), (M, MO), (N, NO), (O, OO), (P, PO), (Q, QO), (R, RO), (S, SO), (U, UO), (V, VO), (W, WO), (X, XO), (Y, YO), (Z, ZO),);
 
-impl<'input, F, P, O> Parser<'input> for F
-where
-    P: Parser<'input, Output = O>,
-    F: Fn() -> P,
-{
-    type Output = O;
+// impl<'input, F, P, O> Parser<'input> for F
+// where
+//     P: Parser<'input, Output = O>,
+//     F: Fn() -> P,
+// {
+//     type Output = O;
 
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        self().parse(input, pos)
-    }
+//     fn parse(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
+//         self().parse(input, pos)
+//     }
 
-    fn parse_slice(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        self().parse_slice(input, pos)
-    }
-}
+//     fn parse_slice(
+//         &self,
+//         input: &'input str,
+//         pos: usize,
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
+//         self().parse_slice(input, pos)
+//     }
+// }
 
-pub struct BoxedParser<'input, 'a: 'input, O>(pub(crate) Rc<dyn Parser<'input, Output = O> + 'a>);
+pub struct BoxedParser<'input, O>(pub(crate) Rc<dyn Parser<'input, O>>);
 
-impl<'a, 'input, O> Clone for BoxedParser<'a, 'input, O> {
+impl<'input, O> Clone for BoxedParser<'input, O> {
     fn clone(&self) -> Self {
         BoxedParser(self.0.clone())
     }
 }
 
-impl<'input, 'a, O> Parser<'input> for BoxedParser<'input, 'a, O> {
-    type Output = O;
-
-    fn parse(
-        &self,
-        input: &'input str,
-        pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+impl<'input, O> Parser<'input, O> for BoxedParser<'input, O> {
+    fn parse(&self, input: &'input str, pos: usize) -> Result<ParseOutput<O>, ParseError> {
         self.0.parse(input, pos)
     }
     fn parse_slice(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.0.parse_slice(input, pos)
     }
 }
