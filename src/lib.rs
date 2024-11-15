@@ -357,9 +357,9 @@ pub trait Parser<'input> {
     //     SimplifyTypes(self)
     // }
 
-    fn boxed<'a>(self) -> BoxedParser<'a, 'input, Self::Output>
+    fn boxed<'a>(self) -> BoxedParser<'input, 'a, Self::Output>
     where
-        Self: Sized + 'a,
+        Self: Sized + 'a + 'input,
     {
         BoxedParser(Rc::new(self))
     }

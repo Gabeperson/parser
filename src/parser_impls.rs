@@ -1953,7 +1953,7 @@ where
     }
 }
 
-pub struct BoxedParser<'input, 'a: 'input, O>(pub(crate) Rc<dyn Parser<'input, Output = O> + 'a>);
+pub struct BoxedParser<'input, 'a, O>(pub(crate) Rc<dyn Parser<'input, Output = O> + 'a>);
 
 impl<'a, 'input, O> Clone for BoxedParser<'a, 'input, O> {
     fn clone(&self) -> Self {
