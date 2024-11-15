@@ -1,6 +1,6 @@
 // #![warn(clippy::nursery, clippy::pedantic, clippy::all)]
 pub mod span;
-use std::{fmt::Display, marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, rc::Rc};
 
 use span::*;
 pub mod parser_impls;
@@ -8,21 +8,22 @@ use parser_impls::*;
 
 pub mod prelude {
     pub use super::parser_impls::{
-        choice, expected, group, int, Alpha, AlphaNumeric, Any1, EndOfInput, ToCharRange as _,
+        choice, custom, expected, group, int, Alpha, AlphaNumeric, Any1, EndOfInput,
+        ToCharRange as _,
     };
     pub use super::span::Span;
     pub use super::Parser;
     pub use super::{ErrorMessage, ParseError, ParseErrorType, ParseOutput, SpanOrPos};
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseError<'input> {
     pub message: ErrorMessage<'input>,
     pub span_or_pos: SpanOrPos,
     pub kind: ParseErrorType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ErrorMessage<'input> {
     Custom(String),
     ExpectedEOF {
@@ -103,11 +104,18 @@ impl SpanOrPos {
     }
 }
 
+#[derive(Debug)]
 pub struct ParseOutput<Output> {
     output: Output,
     span: Span,
     pos: usize,
 }
+
+// impl<Output> std::fmt::Debug for ParseOutput<Output> where Output: Debug {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         self
+//     }
+// }
 
 // debug
 // validate?
@@ -187,14 +195,11 @@ pub trait Parser<'input> {
             padding: pad,
         }
     }
-    fn if_no_progress(self, fail: impl Display) -> IfNoProgress<Self>
+    fn if_no_progress(self, fail: ErrorMessage<'static>) -> IfNoProgress<Self>
     where
         Self: Sized,
     {
-        IfNoProgress {
-            inner: self,
-            fail: fail.to_string(),
-        }
+        IfNoProgress { inner: self, fail }
     }
     fn repeated(self) -> Repeated<Self>
     where

@@ -715,11 +715,12 @@ where
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                if let ErrorMessage::ExpectedOtherToken { ref mut expected } = e.message {
-                    // Might use memory memory than needed but less allocation
-                    expected.clear();
-                    expected.push(self.label.to_string())
+                if let ErrorMessage::Custom(_) = e.message {
+                    return Err(e);
                 }
+                e.message = ErrorMessage::ExpectedOtherToken {
+                    expected: vec![self.label.to_string()],
+                };
                 Err(e)
             }
         }
@@ -733,11 +734,12 @@ where
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
-                if let ErrorMessage::ExpectedOtherToken { ref mut expected } = e.message {
-                    // Might use memory memory than needed but less allocation
-                    expected.clear();
-                    expected.push(self.label.to_string())
+                if let ErrorMessage::Custom(_) = e.message {
+                    return Err(e);
                 }
+                e.message = ErrorMessage::ExpectedOtherToken {
+                    expected: vec![self.label.to_string()],
+                };
                 Err(e)
             }
         }
@@ -1020,9 +1022,17 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
-        let ParseOutput { output, pos, span } = self.first.parse(input, pos)?;
+        let ParseOutput {
+            output,
+            pos: pos1,
+            span,
+        } = self.first.parse(input, pos)?;
         self.second.parse(input, pos)?;
-        Ok(ParseOutput { pos, span, output })
+        Ok(ParseOutput {
+            pos: pos1,
+            span,
+            output,
+        })
     }
 
     fn parse_slice(
@@ -1030,9 +1040,17 @@ where
         input: &'input str,
         pos: usize,
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
-        let ParseOutput { output, pos, span } = self.first.parse_slice(input, pos)?;
+        let ParseOutput {
+            output,
+            pos: pos1,
+            span,
+        } = self.first.parse_slice(input, pos)?;
         self.second.parse_slice(input, pos)?;
-        Ok(ParseOutput { pos, span, output })
+        Ok(ParseOutput {
+            pos: pos1,
+            span,
+            output,
+        })
     }
 }
 
@@ -1487,16 +1505,57 @@ impl<'input> Parser<'input> for CharRange {
     }
 }
 
-pub fn expected<T>(token: impl Display) -> Expected<T> {
+pub fn custom<T>(msg: impl Display) -> Custom<T> {
+    Custom {
+        msg: msg.to_string(),
+        phantomdata: PhantomData,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Custom<T> {
+    msg: String,
+    phantomdata: PhantomData<T>,
+}
+
+impl<'input, T> Parser<'input> for Custom<T> {
+    type Output = T;
+
+    fn parse(
+        &self,
+        _input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+        Err(ParseError {
+            message: ErrorMessage::Custom(self.msg.clone()),
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+
+    fn parse_slice(
+        &self,
+        _input: &'input str,
+        pos: usize,
+    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+        Err(ParseError {
+            message: ErrorMessage::Custom(self.msg.clone()),
+            span_or_pos: SpanOrPos::Pos(pos),
+            kind: ParseErrorType::Backtrack,
+        })
+    }
+}
+
+pub fn expected<T>(tokens: &'static [&'static str]) -> Expected<T> {
     Expected {
-        token: token.to_string(),
+        tokens,
         phantomdata: PhantomData,
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Expected<T> {
-    token: String,
+    tokens: &'static [&'static str],
     phantomdata: PhantomData<T>,
 }
 
@@ -1510,7 +1569,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
-                expected: vec![self.token.clone()],
+                expected: self.tokens.iter().map(|s| s.to_string()).collect(),
             },
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
@@ -1524,7 +1583,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
-                expected: vec![self.token.clone()],
+                expected: self.tokens.iter().map(|s| s.to_string()).collect(),
             },
             span_or_pos: SpanOrPos::Pos(pos),
             kind: ParseErrorType::Backtrack,
@@ -1535,7 +1594,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
 #[derive(Debug, Clone)]
 pub struct IfNoProgress<P> {
     pub(crate) inner: P,
-    pub(crate) fail: String,
+    pub(crate) fail: ErrorMessage<'static>,
 }
 
 impl<'input, P> Parser<'input> for IfNoProgress<P>
@@ -1555,7 +1614,7 @@ where
                 span_or_pos: SpanOrPos::Pos(pos1),
                 ..
             }) if pos == pos1 => Err(ParseError {
-                message: ErrorMessage::Custom(self.fail.clone()),
+                message: self.fail.clone(),
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             }),
@@ -1574,7 +1633,7 @@ where
                 span_or_pos: SpanOrPos::Pos(pos1),
                 ..
             }) if pos == pos1 => Err(ParseError {
-                message: ErrorMessage::Custom(self.fail.clone()),
+                message: self.fail.clone(),
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             }),
