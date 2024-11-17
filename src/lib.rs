@@ -17,17 +17,17 @@ pub mod prelude {
 }
 
 #[derive(Debug, Clone)]
-pub struct ParseError<'input> {
-    pub message: ErrorMessage<'input>,
+pub struct ParseError {
+    pub message: ErrorMessage,
     pub span_or_pos: SpanOrPos,
     pub kind: ParseErrorType,
 }
 
 #[derive(Debug, Clone)]
-pub enum ErrorMessage<'input> {
+pub enum ErrorMessage {
     Custom(String),
-    ExpectedEOF {
-        remaining: &'input str,
+    UnknownToken {
+        remaining: usize,
     },
     ExpectedOtherToken {
         expected: Vec<String>,
@@ -35,15 +35,15 @@ pub enum ErrorMessage<'input> {
     TooFewItems {
         expected_at_least: usize,
         found: usize,
-        err: Box<ParseError<'input>>,
+        err: Box<ParseError>,
     },
 }
 
-impl<'input> std::fmt::Display for ErrorMessage<'input> {
+impl<'input> std::fmt::Display for ErrorMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorMessage::Custom(s) => write!(f, "{}", s),
-            ErrorMessage::ExpectedEOF { remaining: _rem } => write!(f, "Expected EOF"),
+            ErrorMessage::UnknownToken { remaining: _rem } => write!(f, "Expected EOF"),
             ErrorMessage::ExpectedOtherToken { expected } => match expected.as_slice() {
                 [] => panic!("Expected other token with nothing?"),
                 [first] => write!(f, "Expected {first}"),
@@ -70,7 +70,7 @@ impl<'input> std::fmt::Display for ErrorMessage<'input> {
         }
     }
 }
-impl<'input> std::fmt::Display for ParseError<'input> {
+impl<'input> std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.span_or_pos {
             SpanOrPos::Span(span) => write!(
@@ -134,19 +134,17 @@ pub trait Parser<'input> {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
+    ) -> Result<ParseOutput<Self::Output>, ParseError>;
     fn parse_slice(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
-    fn parse_to_end(&self, input: &'input str) -> Result<Self::Output, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError>;
+    fn parse_to_end(&self, input: &'input str) -> Result<Self::Output, ParseError> {
         let ParseOutput { output, pos, .. } = self.parse(input, 0)?;
         if !input[pos..].is_empty() {
             return Err(ParseError {
-                message: ErrorMessage::ExpectedEOF {
-                    remaining: &input[pos..],
-                },
+                message: ErrorMessage::UnknownToken { remaining: pos },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Cut,
             });
@@ -195,7 +193,7 @@ pub trait Parser<'input> {
             padding: pad,
         }
     }
-    fn if_no_progress(self, fail: ErrorMessage<'static>) -> IfNoProgress<Self>
+    fn if_no_progress(self, fail: ErrorMessage) -> IfNoProgress<Self>
     where
         Self: Sized,
     {
@@ -213,7 +211,7 @@ pub trait Parser<'input> {
     }
     fn try_map<F, O>(self, f: F) -> TryMap<Self, F, O>
     where
-        F: Fn(Self::Output) -> Result<O, ParseError<'input>>,
+        F: Fn(Self::Output) -> Result<O, ParseError>,
         Self: Sized,
     {
         TryMap {
@@ -224,7 +222,7 @@ pub trait Parser<'input> {
     }
     fn try_map_with_span<F, O>(self, f: F) -> TryMapWithSpan<Self, F, O>
     where
-        F: Fn(Self::Output, Span) -> Result<O, ParseError<'input>>,
+        F: Fn(Self::Output, Span) -> Result<O, ParseError>,
         Self: Sized,
     {
         TryMapWithSpan {

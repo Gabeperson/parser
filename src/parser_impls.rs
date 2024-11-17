@@ -16,7 +16,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Err(ParseError {
                 message: ErrorMessage::Custom(
@@ -37,7 +37,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Err(ParseError {
                 message: ErrorMessage::Custom(
@@ -90,7 +90,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -109,6 +109,15 @@ where
                 }
                 Err(e) => break Some(e),
             }
+        };
+        if let Some(
+            e @ ParseError {
+                kind: ParseErrorType::Cut,
+                ..
+            },
+        ) = err
+        {
+            return Err(e);
         };
         if res.len() < self.min {
             return Err(ParseError {
@@ -132,7 +141,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -153,6 +162,15 @@ where
                     break Some(e);
                 }
             }
+        };
+        if let Some(
+            e @ ParseError {
+                kind: ParseErrorType::Cut,
+                ..
+            },
+        ) = err
+        {
+            return Err(e);
         };
         if res < self.min {
             return Err(ParseError {
@@ -210,7 +228,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -276,7 +294,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         assert!(
             self.min <= self.max,
             "minimum number of elements parsed must be <= max."
@@ -354,7 +372,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 
@@ -362,7 +380,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse(input, pos)
     }
 }
@@ -384,7 +402,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let e = match self.first.parse(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
@@ -412,7 +430,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let e = match self.first.parse_slice(input, pos) {
             Ok(o) => return Ok(o),
             e @ Err(ParseError {
@@ -452,7 +470,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.inner.parse(input, pos).map_err(|mut e| {
             e.kind = ParseErrorType::Cut;
             e
@@ -463,7 +481,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos).map_err(|mut e| {
             e.kind = ParseErrorType::Cut;
             e
@@ -486,7 +504,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         Ok(match self.inner.parse(input, pos) {
             Ok(ParseOutput { output, span, pos }) => ParseOutput {
                 output: Some(output),
@@ -508,7 +526,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         Ok(self.inner.parse_slice(input, pos).unwrap_or(ParseOutput {
             output: "",
             span: Span {
@@ -536,7 +554,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { span, pos, .. } = self.inner.parse(input, pos)?;
         Ok(ParseOutput {
             output: self.o.clone(),
@@ -549,7 +567,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -571,7 +589,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output);
@@ -582,7 +600,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -597,7 +615,7 @@ pub struct TryMap<P, F, O> {
 impl<'input, P, F, O> Parser<'input> for TryMap<P, F, O>
 where
     P: Parser<'input>,
-    F: Fn(P::Output) -> Result<O, ParseError<'input>>,
+    F: Fn(P::Output) -> Result<O, ParseError>,
 {
     type Output = O;
 
@@ -605,7 +623,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output);
@@ -620,7 +638,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -635,7 +653,7 @@ pub struct TryMapWithSpan<P, F, O> {
 impl<'input, P, F, O> Parser<'input> for TryMapWithSpan<P, F, O>
 where
     P: Parser<'input>,
-    F: Fn(P::Output, Span) -> Result<O, ParseError<'input>>,
+    F: Fn(P::Output, Span) -> Result<O, ParseError>,
 {
     type Output = O;
 
@@ -643,7 +661,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output, span);
@@ -658,7 +676,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -681,7 +699,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { output, span, pos } = self.inner.parse(input, pos)?;
         let func = &self.f;
         let output = func(output, span);
@@ -692,7 +710,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -711,7 +729,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
@@ -730,7 +748,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(mut e) => {
@@ -757,7 +775,7 @@ where
 //         &self,
 //         input: &'input str,
 //         pos: usize,
-//     ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+//     ) -> Result<ParseOutput<Self::Output>, ParseError> {
 //         self.0.parse(input, pos)
 //     }
 
@@ -765,7 +783,7 @@ where
 //         &self,
 //         input: &'input str,
 //         pos: usize,
-//     ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+//     ) -> Result<ParseOutput<&'input str>, ParseError> {
 //         self.0.parse_slice(input, pos)
 //     }
 // }
@@ -788,7 +806,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.left.parse(input, pos)?;
@@ -810,7 +828,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.left.parse_slice(input, pos)?;
@@ -844,7 +862,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let parse_padding = |pos| {
             self.padding
                 .parse(input, pos)
@@ -868,7 +886,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let parse_padding = |pos| {
             self.padding
                 .parse_slice(input, pos)
@@ -905,7 +923,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.first.parse(input, pos)?;
@@ -927,7 +945,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             pos, span: span1, ..
         } = self.first.parse_slice(input, pos)?;
@@ -963,7 +981,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput {
             output,
             pos,
@@ -986,7 +1004,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             output,
             pos,
@@ -1021,7 +1039,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput {
             output,
             pos: pos1,
@@ -1039,7 +1057,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             output,
             pos: pos1,
@@ -1068,7 +1086,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { pos, span, .. } = self.parser.parse(input, pos)?;
         Ok(ParseOutput {
             output: (),
@@ -1081,7 +1099,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parser.parse_slice(input, pos)
     }
 }
@@ -1100,7 +1118,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput { pos, span, .. } = self.inner.parse(input, pos)?;
         Ok(ParseOutput {
             output: span,
@@ -1113,7 +1131,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice(input, pos)
     }
 }
@@ -1134,7 +1152,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         let ParseOutput {
             output: output1,
             pos,
@@ -1159,7 +1177,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let ParseOutput {
             output: _output1,
             pos: pos1,
@@ -1187,7 +1205,7 @@ impl<'input, 'r> Parser<'input> for &'r str {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1195,7 +1213,7 @@ impl<'input, 'r> Parser<'input> for &'r str {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input[pos..].starts_with(self) {
             Ok(ParseOutput {
                 output: &input[pos..pos + self.len()],
@@ -1226,7 +1244,7 @@ impl<'input> Parser<'input> for EndOfInput {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         if input.len() == pos {
             Ok(ParseOutput {
                 output: (),
@@ -1235,9 +1253,7 @@ impl<'input> Parser<'input> for EndOfInput {
             })
         } else {
             Err(ParseError {
-                message: ErrorMessage::ExpectedEOF {
-                    remaining: &input[pos..],
-                },
+                message: ErrorMessage::UnknownToken { remaining: pos },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             })
@@ -1248,7 +1264,7 @@ impl<'input> Parser<'input> for EndOfInput {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input.len() == pos {
             Ok(ParseOutput {
                 output: "",
@@ -1257,9 +1273,7 @@ impl<'input> Parser<'input> for EndOfInput {
             })
         } else {
             Err(ParseError {
-                message: ErrorMessage::ExpectedEOF {
-                    remaining: &input[pos..],
-                },
+                message: ErrorMessage::UnknownToken { remaining: pos },
                 span_or_pos: SpanOrPos::Pos(pos),
                 kind: ParseErrorType::Backtrack,
             })
@@ -1282,7 +1296,7 @@ impl<'input> Parser<'input> for IntParser {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1290,7 +1304,7 @@ impl<'input> Parser<'input> for IntParser {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         let mut end = pos;
         for (i, c) in input[pos..].char_indices() {
             if c.is_digit(self.0) {
@@ -1327,7 +1341,7 @@ impl<'input> Parser<'input> for Alpha {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1335,7 +1349,7 @@ impl<'input> Parser<'input> for Alpha {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if c.is_alphabetic() {
                 return Ok(ParseOutput {
@@ -1364,7 +1378,7 @@ impl<'input> Parser<'input> for AlphaNumeric {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1372,7 +1386,7 @@ impl<'input> Parser<'input> for AlphaNumeric {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if c.is_alphanumeric() {
                 return Ok(ParseOutput {
@@ -1401,7 +1415,7 @@ impl<'input> Parser<'input> for Any1 {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1409,7 +1423,7 @@ impl<'input> Parser<'input> for Any1 {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if input[pos..].chars().next().is_some() {
             return Ok(ParseOutput {
                 output: &input[pos..pos + 1],
@@ -1477,7 +1491,7 @@ impl<'input> Parser<'input> for CharRange {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse_slice(input, pos)
     }
 
@@ -1485,7 +1499,7 @@ impl<'input> Parser<'input> for CharRange {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         if let Some(c) = input[pos..].chars().next() {
             if self.contains(&c) {
                 return Ok(ParseOutput {
@@ -1525,7 +1539,7 @@ impl<'input, T> Parser<'input> for Custom<T> {
         &self,
         _input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::Custom(self.msg.clone()),
             span_or_pos: SpanOrPos::Pos(pos),
@@ -1537,7 +1551,7 @@ impl<'input, T> Parser<'input> for Custom<T> {
         &self,
         _input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::Custom(self.msg.clone()),
             span_or_pos: SpanOrPos::Pos(pos),
@@ -1566,7 +1580,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
         &self,
         _input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
                 expected: self.tokens.iter().map(|s| s.to_string()).collect(),
@@ -1580,7 +1594,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
         &self,
         _input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         Err(ParseError {
             message: ErrorMessage::ExpectedOtherToken {
                 expected: self.tokens.iter().map(|s| s.to_string()).collect(),
@@ -1594,7 +1608,7 @@ impl<'input, T> Parser<'input> for Expected<T> {
 #[derive(Debug, Clone)]
 pub struct IfNoProgress<P> {
     pub(crate) inner: P,
-    pub(crate) fail: ErrorMessage<'static>,
+    pub(crate) fail: ErrorMessage,
 }
 
 impl<'input, P> Parser<'input> for IfNoProgress<P>
@@ -1607,7 +1621,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         match self.inner.parse(input, pos) {
             Ok(o) => Ok(o),
             Err(ParseError {
@@ -1626,7 +1640,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         match self.inner.parse_slice(input, pos) {
             Ok(o) => Ok(o),
             Err(ParseError {
@@ -1657,7 +1671,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.inner.parse_choice(input, pos)
     }
 
@@ -1665,7 +1679,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice_choice(input, pos)
     }
 }
@@ -1678,13 +1692,13 @@ pub trait ChoiceImpl<'input> {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
+    ) -> Result<ParseOutput<Self::Output>, ParseError>;
     #[doc(hidden)]
     fn parse_slice_choice(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+    ) -> Result<ParseOutput<&'input str>, ParseError>;
 }
 pub fn choice<'input, P: ChoiceImpl<'input>>(between: P) -> Choice<P> {
     Choice { inner: between }
@@ -1700,7 +1714,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse(input, pos)
     }
 
@@ -1708,7 +1722,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 }
@@ -1725,7 +1739,7 @@ macro_rules! impl_choice {
                 &self,
                 input: &'input str,
                 pos: usize,
-            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+            ) -> Result<ParseOutput<Self::Output>, ParseError> {
                 // Cursed, but it works
                 #[allow(non_snake_case)]
                 let ($($type,)+) = self;
@@ -1751,7 +1765,7 @@ macro_rules! impl_choice {
                 &self,
                 input: &'input str,
                 pos: usize,
-            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+            ) -> Result<ParseOutput<&'input str>, ParseError> {
                 // Cursed, but it works
                 #[allow(non_snake_case)]
                 let ($($type,)+) = self;
@@ -1816,7 +1830,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.inner.parse_group(input, pos)
     }
 
@@ -1824,7 +1838,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.inner.parse_slice_group(input, pos)
     }
 }
@@ -1837,13 +1851,13 @@ pub trait GroupImpl<'input> {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>>;
+    ) -> Result<ParseOutput<Self::Output>, ParseError>;
     #[doc(hidden)]
     fn parse_slice_group(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>>;
+    ) -> Result<ParseOutput<&'input str>, ParseError>;
 }
 
 pub fn group<'input, P: GroupImpl<'input>>(group: P) -> Group<P> {
@@ -1860,7 +1874,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.parse(input, pos)
     }
 
@@ -1868,7 +1882,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.parse_slice(input, pos)
     }
 }
@@ -1885,7 +1899,7 @@ macro_rules! impl_group {
                 &self,
                 input: &'input str,
                 pos: usize,
-            ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+            ) -> Result<ParseOutput<Self::Output>, ParseError> {
                 // Cursed, but it works
                 #[allow(non_snake_case)]
                 let ($($type,)+) = self;
@@ -1912,7 +1926,7 @@ macro_rules! impl_group {
                 &self,
                 input: &'input str,
                 pos: usize,
-            ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+            ) -> Result<ParseOutput<&'input str>, ParseError> {
                 // Cursed, but it works
                 #[allow(non_snake_case)]
                 let ($($type,)+) = self;
@@ -1999,7 +2013,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self().parse(input, pos)
     }
 
@@ -2007,7 +2021,7 @@ where
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self().parse_slice(input, pos)
     }
 }
@@ -2027,14 +2041,14 @@ impl<'input, 'a, O> Parser<'input> for BoxedParser<'input, 'a, O> {
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<Self::Output>, ParseError<'input>> {
+    ) -> Result<ParseOutput<Self::Output>, ParseError> {
         self.0.parse(input, pos)
     }
     fn parse_slice(
         &self,
         input: &'input str,
         pos: usize,
-    ) -> Result<ParseOutput<&'input str>, ParseError<'input>> {
+    ) -> Result<ParseOutput<&'input str>, ParseError> {
         self.0.parse_slice(input, pos)
     }
 }
