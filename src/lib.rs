@@ -43,7 +43,7 @@ impl<'input> std::fmt::Display for ErrorMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ErrorMessage::Custom(s) => write!(f, "{}", s),
-            ErrorMessage::UnknownToken { remaining: _rem } => write!(f, "Expected EOF"),
+            ErrorMessage::UnknownToken { remaining: _rem } => write!(f, "Unknown token"),
             ErrorMessage::ExpectedOtherToken { expected } => match expected.as_slice() {
                 [] => panic!("Expected other token with nothing?"),
                 [first] => write!(f, "Expected {first}"),
